@@ -108,15 +108,6 @@ Planificación para un cuatrimestre (10 semanas desde la propuesta).
 - [ ] Dashboard MVP
 - [ ] Entrega final
 
-## Instalación (en desarrollo)
-
-```bash
-git clone <url-del-repositorio>
-cd f1-strategy-audit
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-docker compose up -d db        # levanta PostgreSQL
 ```
 
 
