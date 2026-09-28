@@ -107,6 +107,7 @@ Planificación para un cuatrimestre (10 semanas desde la propuesta).
 - [ ] Modelo de ritmo validado
 - [ ] Simulador validado y Strategy Delta calculado
 - [ ] Dashboard MVP
+- [ ] Aplicación desplegada en una URL pública
 - [ ] Entrega final
 
 ```
