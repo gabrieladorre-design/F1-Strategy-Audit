@@ -71,7 +71,7 @@ f1-strategy-audit/
 ├── docker-compose.yml         # PostgreSQL
 ├── .env.example               # Variables de entorno
 ├── docs/
-│   └── propuesta.pdf          # Propuesta del proyecto
+│   └── Propuesta.pdf          # Propuesta del proyecto
 ├── data/                      # Caché local de FastF1 (no se versiona)
 ├── notebooks/                 # Análisis exploratorio
 ├── src/strategy_audit/
