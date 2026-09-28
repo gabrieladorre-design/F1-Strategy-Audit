@@ -62,7 +62,7 @@ PostgreSQL ──► Motor de análisis (modelo de ritmo · pit loss · simulado
 Python 3.11 · pandas · FastF1 · SQLAlchemy · PostgreSQL · scikit-learn · Dash / Plotly · pytest
 Opcional: LightGBM · FastAPI · Docker Compose · API de un modelo de lenguaje
 
-## Estructura del repositorio
+## Estructura prevista del repositorio
 
 ```
 f1-strategy-audit/
