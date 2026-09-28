@@ -110,6 +110,5 @@ Planificación para un cuatrimestre (10 semanas desde la propuesta).
 - [ ] Aplicación desplegada en una URL pública
 - [ ] Entrega final
 
-```
 
 
