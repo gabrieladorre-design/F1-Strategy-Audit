@@ -3,7 +3,7 @@
 **Auditoría de estrategias de carrera en Fórmula 1 con simulación e IA**
 
 Proyecto de la asignatura *Desarrollo de Aplicaciones para la Visualización de Datos* (curso 2026-2027), ICAI-ICADE, Universidad Pontificia Comillas.
-Autora: Gabriela
+Autora: Gabriela De Dorremochea
 
 ---
 
@@ -16,21 +16,21 @@ En Fórmula 1 la estrategia decide carreras: cuándo parar y con qué neumático
 1. **Modela el ritmo** de cada piloto (degradación del neumático y efecto del combustible) a partir de los tiempos por vuelta.
 2. **Simula estrategias alternativas** (otra vuelta de parada, otros compuestos, una o dos paradas) y calcula el tiempo total de carrera resultante.
 3. **Cuantifica la calidad de cada decisión** con la métrica *Strategy Delta*: segundos ganados o perdidos frente a la mejor estrategia simulada.
-4. **Lo visualiza** en un dashboard con análisis de carrera, simulador «¿y si…?» y balance de temporada.
+4. **Lo visualiza** en un dashboard con análisis de carrera, simulador "¿y si…?" y balance de temporada.
 
 Usuarios objetivo: aficionados avanzados, periodistas y creadores de contenido, y estudiantes o aspirantes a ingenieros de estrategia.
 
 ## Objetivos
 
-**MVP (comprometido para la entrega final)**
+**Minimum Viable Product**
 
 - **O1 · Datos:** pipeline reproducible que integre FastF1 y Jolpica-F1 en PostgreSQL (temporadas 2025 y 2026, carreras en seco).
 - **O2 · Modelo de ritmo:** regresión por compuesto y circuito que estime la degradación y el efecto del combustible, validada con MAE sobre carreras no usadas en el ajuste.
 - **O3 · Simulador:** cálculo del tiempo total de carrera de un piloto para estrategias de una y dos paradas, validado frente a los tiempos reales.
 - **O4 · Auditoría:** métrica *Strategy Delta* por piloto, carrera, equipo y temporada.
-- **O5 · Visualización:** dashboard en Dash/Plotly con tres vistas (carrera, «¿y si…?», temporada).
+- **O5 · Visualización:** dashboard en Dash/Plotly con tres vistas (carrera, "¿y si…?", temporada).
 
-**Ampliaciones opcionales (solo tras completar el MVP)**
+**Ampliaciones opcionales (después de terminar el MVP)**
 
 - API REST con FastAPI · asistente de IA que explique los resultados · reacción ante Safety Car / VSC · modelo LightGBM · simulación Monte Carlo con incertidumbre.
 
@@ -89,16 +89,16 @@ f1-strategy-audit/
 
 ## Plan de trabajo inicial
 
-Planificación para un cuatrimestre (~14 semanas desde la propuesta). Las fechas se ajustarán al calendario de la asignatura.
+Planificación para un cuatrimestre (10 semanas desde la propuesta).
 
 | Fase | Semanas | Tareas | Entregable |
 |---|---|---|---|
 | **0. Propuesta** | 1 | Definición del proyecto, repositorio y README | Propuesta (5 oct 2026) |
-| **1. Datos** | 2–4 | Descarga con FastF1 y Jolpica, limpieza de vueltas, esquema y carga en PostgreSQL, EDA de degradación | Base de datos 2025–2026 y notebook de EDA |
-| **2. Modelo de ritmo** | 5–6 | Regresión por compuesto y circuito, pérdida en pit lane, validación (MAE) | Modelo validado |
-| **3. Simulador y auditoría** | 7–9 | Simulador de 1 y 2 paradas, validación frente a tiempos reales, cálculo del Strategy Delta | Auditoría de todas las carreras |
-| **4. Dashboard** | 10–12 | Vistas de carrera, «¿y si…?» y temporada en Dash | Aplicación funcional (MVP) |
-| **5. Cierre** | 13–14 | Pruebas, documentación, memoria y presentación; ampliaciones si hay margen | Entrega final |
+| **1. Datos** | 2 | Descarga con FastF1 y Jolpica, limpieza de vueltas, esquema y carga en PostgreSQL, EDA de degradación | Base de datos 2025–2026 y notebook de EDA |
+| **2. Modelo de ritmo** | 2-4 | Regresión por compuesto y circuito, pérdida en pit lane, validación (MAE) | Modelo validado |
+| **3. Simulador y auditoría** | 5-6 | Simulador de 1 y 2 paradas, validación frente a tiempos reales, cálculo del Strategy Delta | Auditoría de todas las carreras |
+| **4. Dashboard** | 7-8 | Vistas de carrera, «¿y si…?» y temporada en Dash | Aplicación funcional (MVP) |
+| **5. Cierre** | 9-10 | Pruebas, documentación, memoria y presentación; ampliaciones si hay margen | Entrega final |
 
 ### Hitos
 
@@ -120,6 +120,4 @@ cp .env.example .env
 docker compose up -d db        # levanta PostgreSQL
 ```
 
-## Aviso
 
-Proyecto académico sin afiliación con la Fórmula 1, la FIA ni ningún equipo. Los datos proceden de fuentes públicas.
