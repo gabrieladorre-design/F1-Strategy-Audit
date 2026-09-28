@@ -3,7 +3,8 @@
 **Auditoría de estrategias de carrera en Fórmula 1 con simulación e IA**
 
 Proyecto de la asignatura *Desarrollo de Aplicaciones para la Visualización de Datos* (curso 2026-2027), ICAI-ICADE, Universidad Pontificia Comillas.
-Autora: Gabriela De Dorremochea
+
+Gabriela De Dorremochea
 
 ---
 
