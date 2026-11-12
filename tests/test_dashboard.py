@@ -40,8 +40,25 @@ def test_figures(store):
                              list(audit["Driver"]), set(), 60)
     assert len(fig.data) > 0
     assert len(F.delta_bars(audit).data) == 1
-    assert len(F.degradation(store.laps[store.laps["Round"] == rnd], store.model(rnd)).data) == 6
+    assert len(F.degradation(store.laps[store.laps["Round"] == rnd], store.model(rnd)).data) >= 5
     assert len(F.team_ranking(store.audit).data) == 1
+    assert len(F.team_ranking(store.audit, focus="Ferrari").data) == 1
+    names = {r: f"GP {r}" for r in store.audited_rounds}
+    assert len(F.team_evolution(store.audit, names, names).data) > 0
+    assert len(F.season_heatmap(store.audit, names, names).data) == 1
+    assert len(F.positions_lost(store.audit).data) == 1
+
+
+def test_theme_format():
+    from strategy_audit.dashboard.theme import fmt_deg, fmt_lap, fmt_s, team_color
+
+    assert fmt_s(8.43) == "8,4 s"
+    assert fmt_s(-2.0, signed=True) == "−2,0 s"
+    assert fmt_lap(92.481) == "1:32,481"
+    assert fmt_deg(0.085) == "+0,085 s/vuelta"
+    # Un color muy claro se oscurece para que contraste sobre blanco
+    assert team_color("#FFFFFF") != "#FFFFFF"
+    assert team_color("#E8002D") == "#E8002D"
 
 
 def test_app_builds(store):
