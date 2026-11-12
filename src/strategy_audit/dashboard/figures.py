@@ -71,7 +71,7 @@ def stint_comparison(actual: pd.DataFrame, best: pd.DataFrame, order: list[str],
     if neutral:
         first = min(neutral)
         fig.add_annotation(x=first - 0.5, y=1.0, yref="paper", text="SC/VSC", showarrow=False,
-                           font=dict(color=MUTED, size=10), yanchor="bottom", xref="x")
+                           font=dict(color=MUTED, size=11), yanchor="bottom", xref="x")
 
     ticks = [f"<b>{d}</b>" if d == focus else d for d in order]
     fig.update_layout(barmode="overlay", bargap=0.35)
@@ -165,7 +165,7 @@ def degradation(laps: pd.DataFrame, model) -> go.Figure:
         for y_lab, _, c in labels:
             fig.add_annotation(x=x_label, y=y_lab, text=f"{COMPOUND_ES[c]} {fmt_deg(model.compound_deg[c])}",
                                showarrow=False, xanchor="left", xshift=8,
-                               font=dict(color=team_color(COMPOUND[c]["stroke"], for_text=True), size=11))
+                               font=dict(color=team_color(COMPOUND[c]["stroke"], for_text=True), size=12))
     fig.update_xaxes(title_text="Edad del neumático (vueltas)")
     fig.update_yaxes(title_text="Tiempo relativo (s)")
     fig = _base(fig, height=380)

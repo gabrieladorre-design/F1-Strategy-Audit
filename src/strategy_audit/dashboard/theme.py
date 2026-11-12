@@ -29,7 +29,7 @@ NEUTRAL_BAND = "#E8A317"  # SC/VSC (siempre con opacidad 0,10-0,15)
 # Escala secuencial de un solo tono (Strategy Delta, mapas de calor)
 SEQ_RED = [[0, "#FBEDEE"], [0.5, "#E0566A"], [1, "#7A0A1C"]]
 
-FONT = "Inter, -apple-system, 'Segoe UI', Roboto, sans-serif"
+FONT = "'Titillium Web', -apple-system, 'Segoe UI', Roboto, sans-serif"
 
 # ---------------------------------------------------------------- Neumáticos
 # Colores Pirelli adaptados a fondo blanco: el Medio y el Duro necesitan contorno
@@ -77,19 +77,19 @@ def with_alpha(hex_: str, alpha: float) -> str:
 
 # ---------------------------------------------------------------- Plantilla Plotly
 pio.templates["strategy_audit"] = go.layout.Template(layout=dict(
-    font=dict(family=FONT, color=TEXT_2, size=12),
+    font=dict(family=FONT, color=TEXT_2, size=13),
     paper_bgcolor=PANEL, plot_bgcolor=PANEL,
     separators=",.",                       # decimal con coma (español)
     colorway=[PRIMARY, ACCENT, "#6B7280", "#9CA3AF"],
     margin=dict(l=56, r=24, t=16, b=44),
-    hoverlabel=dict(bgcolor=PANEL, bordercolor=LINE, font=dict(family=FONT, color=TEXT, size=12)),
+    hoverlabel=dict(bgcolor=PANEL, bordercolor=LINE, font=dict(family=FONT, color=TEXT, size=13)),
     legend=dict(orientation="h", x=0, xanchor="left", y=1.02, yanchor="bottom",
                 bgcolor="rgba(0,0,0,0)", font=dict(color=TEXT_2), title_text=""),
     xaxis=dict(showgrid=False, zeroline=False, showline=True, linecolor=LINE, linewidth=1,
-               ticks="outside", tickcolor=LINE, ticklen=4, tickfont=dict(color=MUTED),
-               title=dict(font=dict(color=MUTED, size=12), standoff=8)),
+               ticks="outside", tickcolor=LINE, ticklen=4, tickfont=dict(color=MUTED, size=12),
+               title=dict(font=dict(color=MUTED, size=13), standoff=8)),
     yaxis=dict(showgrid=True, gridcolor=GRID, gridwidth=1, zeroline=False, showline=False,
-               tickfont=dict(color=MUTED), title=dict(font=dict(color=MUTED, size=12), standoff=8)),
+               tickfont=dict(color=MUTED, size=12), title=dict(font=dict(color=MUTED, size=13), standoff=8)),
     bargap=0.3,
 ))
 
