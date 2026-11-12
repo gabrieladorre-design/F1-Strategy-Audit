@@ -4,6 +4,8 @@ Proyecto de la asignatura *Desarrollo de Aplicaciones para la Visualización de 
 
 Gabriela De Dorremochea
 
+**Aplicación desplegada:** https://f1-strategy-audit.onrender.com/
+
 ---
 
 ## Descripción
@@ -144,7 +146,7 @@ Planificación para un cuatrimestre (10 semanas desde la propuesta).
 - [x] Datos reales 2025 descargados (24 carreras, 26 689 vueltas) y modelo validado
 - [x] Simulador y Strategy Delta (con tests)
 - [x] Dashboard MVP (carrera, ¿y si…?, temporada, metodología)
-- [ ] Aplicación desplegada en una URL pública
+- [x] Aplicación desplegada en una URL pública (Render)
 - [ ] Presentación (26/30 nov 2026)
 - [ ] Ampliaciones: temporada 2026, PostgreSQL, API, asistente IA
 
