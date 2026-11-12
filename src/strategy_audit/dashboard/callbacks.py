@@ -1,34 +1,57 @@
-"""Callbacks: conectan los controles con las figuras."""
+"""Callbacks: conectan los controles con las figuras y generan los títulos-conclusión."""
 from __future__ import annotations
 
 import numpy as np
-import plotly.graph_objects as go
 from dash import Input, Output, State, ctx, html, no_update
 
 from strategy_audit.dashboard import figures as F
 from strategy_audit.dashboard.data import Store
 from strategy_audit.dashboard.layout import kpi
+from strategy_audit.dashboard.theme import COMPOUND_ES, fmt_deg, fmt_pct, fmt_pos, fmt_s
 from strategy_audit.simulation.audit import driver_actual_strategy
 from strategy_audit.simulation.simulator import is_feasible, lap_times, max_stint
 
 
-def _fmt_delta(s: float) -> str:
-    return f"{s:+.1f} s"
+def _surname(full_name: str) -> str:
+    parts = str(full_name).split()
+    return parts[-1] if parts else str(full_name)
+
+
+def _warning(items: list[str]):
+    if not items:
+        return ""
+    return html.Div(className="warning", children=html.Ul([html.Li(w) for w in items]))
 
 
 def register(app, store: Store) -> None:
-    race_names = {r: store.race_name(r) for r in store.audited_rounds}
+    race_names = {r: store.race_es(r) for r in store.audited_rounds}
+    race_abbr = {r: store.race_abbr(r) for r in store.audited_rounds}
 
     # ------------------------------------------------------------------ Carrera
+    @app.callback(Output("race-focus", "options"), Output("race-focus", "value"),
+                  Input("race-dd", "value"), State("race-focus", "value"))
+    def race_focus_options(rnd, current):
+        a = store.audit[store.audit["Round"] == rnd].sort_values("AuditedPosition")
+        opts = [{"label": f"{fmt_pos(p)} · {n}", "value": d}
+                for d, n, p in zip(a["Driver"], a["FullName"], a["AuditedPosition"])]
+        return opts, current if current in set(a["Driver"]) else None
+
     @app.callback(
-        Output("race-kpis", "children"), Output("race-stints", "figure"),
-        Output("race-delta", "figure"), Output("race-deg", "figure"),
-        Input("race-dd", "value"),
+        Output("race-kpis", "children"),
+        Output("race-stints", "figure"), Output("race-stints-card-title", "children"),
+        Output("race-stints-card-sub", "children"),
+        Output("race-delta", "figure"), Output("race-delta-card-title", "children"),
+        Output("race-delta-card-sub", "children"),
+        Output("race-deg", "figure"), Output("race-deg-card-title", "children"),
+        Output("race-deg-card-sub", "children"),
+        Input("race-dd", "value"), Input("race-focus", "value"),
     )
-    def update_race(rnd):
+    def update_race(rnd, focus):
         if rnd is None:
-            return [], F.empty(), F.empty(), F.empty()
+            msg = "Elige un Gran Premio para ver su auditoría"
+            return [], F.empty(msg), "", "", F.empty(msg), "", "", F.empty(msg), "", ""
         row = store.race_row(rnd)
+        gp = store.race_es(rnd)
         audit = store.audit[store.audit["Round"] == rnd].sort_values("AuditedPosition")
         order = list(audit["Driver"])
         actual = store.stints[store.stints["Round"] == rnd]
@@ -36,18 +59,43 @@ def register(app, store: Store) -> None:
         neutral = store.neutralised_laps(rnd)
         model = store.model(rnd)
         worst = audit.loc[audit["StrategyDelta"].idxmax()]
-        optimal_share = (audit["StrategyDelta"] < 1.0).mean()
+        near_opt = audit["StrategyDelta"] < 1.0
 
         kpis = [
-            kpi("Pérdida en boxes", f"{row['PitLoss']:.1f} s", "parada con bandera verde"),
+            kpi("Pérdida en boxes", fmt_s(row["PitLoss"]), "por parada con bandera verde"),
             kpi("Vueltas con SC/VSC", f"{len(neutral)}", f"de {int(row['TotalLaps'])}"),
-            kpi("Mayor pérdida", f"{worst['Driver']} · {worst['StrategyDelta']:.1f} s", worst["Team"] or ""),
-            kpi("Estrategias casi óptimas", f"{optimal_share:.0%}", "pilotos a menos de 1 s de la mejor"),
+            kpi("Mayor pérdida", f"{worst['Driver']} · {fmt_s(worst['StrategyDelta'])}",
+                worst["Team"] or "", tone="loss"),
+            kpi("Estrategias casi óptimas", fmt_pct(near_opt.mean()), "a menos de 1 s de la mejor simulada"),
         ]
+
+        top_best = audit["BestStrategy"].value_counts().index[0]
+        stints_title = (f"En el {gp}, la mejor estrategia simulada era {top_best}; "
+                        f"{int(near_opt.sum())} de {len(audit)} pilotos se quedaron a menos de 1 s")
+        stints_sub = ("Stints por piloto, ordenados por posición final · izquierda: real, derecha: óptima"
+                      + (" · franjas: vueltas con SC/VSC" if neutral else ""))
+
+        subject = audit[audit["Driver"] == focus].iloc[0] if focus in set(order) else worst
+        if subject["StrategyDelta"] < 0.05:
+            delta_title = f"{_surname(subject['FullName'])} acertó con la estrategia óptima ({subject['ActualStrategy']})"
+        else:
+            delta_title = (f"{_surname(subject['FullName'])} perdió {fmt_s(subject['StrategyDelta'])} "
+                           f"con {subject['ActualStrategy']} frente a {subject['BestStrategy']}")
+        delta_sub = "Segundos perdidos frente a la mejor estrategia simulada (s) · menos es mejor"
+
+        usable = {c: d for c, d in model.compound_deg.items() if c in model.usable_compounds}
+        if usable:
+            c_max = max(usable, key=usable.get)
+            deg_title = f"El {COMPOUND_ES[c_max].lower()} fue el que más se degradó: {fmt_deg(usable[c_max])}"
+        else:
+            deg_title = "Degradación estimada por compuesto"
+        deg_sub = "Vueltas limpias corregidas por piloto y combustible · recta = degradación del modelo"
+
         laps = store.laps[store.laps["Round"] == rnd]
         return (kpis,
-                F.stint_comparison(actual, best, order, neutral, int(row["TotalLaps"])),
-                F.delta_bars(audit), F.degradation(laps, model))
+                F.stint_comparison(actual, best, order, neutral, int(row["TotalLaps"]), focus), stints_title, stints_sub,
+                F.delta_bars(audit, focus), delta_title, delta_sub,
+                F.degradation(laps, model), deg_title, deg_sub)
 
     # ------------------------------------------------------------------ ¿Y si…?
     @app.callback(
@@ -56,10 +104,9 @@ def register(app, store: Store) -> None:
     )
     def update_drivers(rnd, current):
         a = store.audit[store.audit["Round"] == rnd].sort_values("AuditedPosition")
-        opts = [{"label": f"P{int(p)} · {d} ({t})", "value": d}
-                for d, t, p in zip(a["Driver"], a["Team"], a["AuditedPosition"])]
-        drivers = list(a["Driver"])
-        if current in drivers:
+        opts = [{"label": f"{fmt_pos(p)} · {n} ({t})", "value": d}
+                for d, n, t, p in zip(a["Driver"], a["FullName"], a["Team"], a["AuditedPosition"])]
+        if current in set(a["Driver"]):
             return opts, current
         # Por defecto, el piloto al que más le costó la estrategia: el caso más interesante
         return opts, a.loc[a["StrategyDelta"].idxmax(), "Driver"] if len(a) else None
@@ -81,7 +128,8 @@ def register(app, store: Store) -> None:
             stints = list(zip(b["Compound"], b["Laps"].astype(int)))
         else:
             stints, _ = driver_actual_strategy(store.stints, rnd, driver)
-        stints = stints[:3] if len(stints) <= 3 else stints[:2] + [(stints[2][0], sum(n for _, n in stints[2:]))]
+        if len(stints) > 3:   # más de 2 paradas: se agrupan las últimas en el tercer stint
+            stints = stints[:2] + [(stints[2][0], sum(n for _, n in stints[2:]))]
         stops = min(max(len(stints) - 1, 1), 2)
         comps = [c for c, _ in stints] + ["HARD"] * 3
         cuts = list(np.cumsum([n for _, n in stints])[:-1]) + [total - 10]
@@ -89,9 +137,7 @@ def register(app, store: Store) -> None:
         s2 = int(cuts[1]) if stops == 2 else min(s1 + 15, total - 5)
         return stops, comps[0], comps[1], comps[2] if stops == 2 else "MEDIUM", s1, s2, total - 1, total - 1
 
-    @app.callback(
-        Output("wi-c3-wrap", "style"), Output("wi-s2-wrap", "style"), Input("wi-stops", "value"),
-    )
+    @app.callback(Output("wi-c3-wrap", "style"), Output("wi-s2-wrap", "style"), Input("wi-stops", "value"))
     def toggle_second_stop(stops):
         style = {} if stops == 2 else {"display": "none"}
         return style, style
@@ -99,88 +145,143 @@ def register(app, store: Store) -> None:
     @app.callback(
         Output("wi-kpis", "children"), Output("wi-gap", "figure"), Output("wi-laps", "figure"),
         Output("wi-warning", "children"),
+        Output("wi-gap-card-title", "children"), Output("wi-gap-card-sub", "children"),
         Input("wi-stops", "value"), Input("wi-c1", "value"), Input("wi-c2", "value"), Input("wi-c3", "value"),
         Input("wi-s1", "value"), Input("wi-s2", "value"),
         State("wi-race", "value"), State("wi-driver", "value"),
     )
     def simulate(stops, c1, c2, c3, s1, s2, rnd, driver):
+        sub = "Diferencia acumulada frente a la estrategia real (s) · por debajo de 0, la alternativa va por delante"
         if None in (rnd, driver, c1, c2, s1):
-            return [], F.empty(), F.empty(), ""
+            msg = "Elige un Gran Premio y un piloto para simular"
+            return [], F.empty(msg), F.empty(msg), "", "Diseña una estrategia alternativa", sub
         model = store.model(rnd)
         total = int(store.race_row(rnd)["TotalLaps"])
         pls = store.pit_losses(rnd)
         actual, first_age = driver_actual_strategy(store.stints, rnd, driver)
+        a = store.audit[store.audit["Round"] == rnd]
+        me = a[a["Driver"] == driver].iloc[0]
+        laps_done = int(me["LapsCompleted"])
+        name = _surname(me["FullName"])
 
         if stops == 2:
             if s2 is None or s2 <= s1:
-                return [], F.empty("La 2ª parada debe ser posterior a la 1ª"), F.empty(), \
-                    "La 2ª parada debe ser posterior a la 1ª."
-            alt = [(c1, s1), (c2, s2 - s1), (c3, total - s2)]
+                msg = "Mueve la 2.ª parada a una vuelta posterior a la 1.ª"
+                return [], F.empty(msg), F.empty(msg), _warning([msg]), "Revisa las vueltas de parada", sub
+            alt = [(c1, s1), (c2, s2 - s1), (c3, laps_done - s2)]
         else:
-            alt = [(c1, s1), (c2, total - s1)]
+            alt = [(c1, s1), (c2, laps_done - s1)]
+        if alt[-1][1] < 1:
+            msg = "La última parada no puede ser después de la última vuelta del piloto"
+            return [], F.empty(msg), F.empty(msg), _warning([msg]), "Revisa las vueltas de parada", sub
+
+        missing = [c for c, _ in alt if c not in model.compound_deg]
+        if missing:
+            msg = (f"Nadie usó {', '.join(COMPOUND_ES[c].lower() for c in missing)} en esta carrera: "
+                   "elige otro compuesto")
+            return [], F.empty(msg), F.empty(msg), _warning([msg]), "Compuesto sin datos en esta carrera", sub
 
         warnings = []
-        if any(c not in model.compound_deg for c, _ in alt):
-            missing = [c for c, _ in alt if c not in model.compound_deg]
-            return [], F.empty("Compuesto no usado en esta carrera"), F.empty(), \
-                f"Nadie usó {', '.join(missing).lower()} en esta carrera: no hay datos para modelarlo."
         if not is_feasible(model, alt, first_age):
             if len({c for c, _ in alt}) < 2:
                 warnings.append("El reglamento obliga a usar al menos dos compuestos de seco.")
+            if len(alt) - 1 < model.min_stops:
+                warnings.append(f"En esta carrera eran obligatorias {model.min_stops} paradas.")
             for i, (c, n) in enumerate(alt):
                 age0 = first_age if i == 0 else 1
                 if age0 + n - 1 > max_stint(model, c):
-                    warnings.append(f"Stint {i + 1}: {n} vueltas con {c.lower()} supera lo observado en carrera "
-                                    f"({max_stint(model, c)}); el modelo extrapola.")
+                    warnings.append(f"Stint {i + 1}: {n} vueltas con {COMPOUND_ES[c].lower()} supera lo observado "
+                                    f"en carrera ({max_stint(model, c)}); el modelo extrapola.")
                 if n < 5:
                     warnings.append(f"Stint {i + 1} demasiado corto ({n} vueltas).")
+                if c not in model.usable_compounds:
+                    warnings.append(f"Hay pocas vueltas con {COMPOUND_ES[c].lower()}: estimación poco fiable.")
 
         sim_alt = lap_times(model, driver, alt, first_age, pls)
         sim_real = lap_times(model, driver, actual, first_age, pls)
         gap = np.cumsum(sim_alt - sim_real)
         diff = float(gap[-1])
 
-        a = store.audit[(store.audit["Round"] == rnd)]
-        me = a[a["Driver"] == driver].iloc[0]
         # Orden de llegada: más vueltas primero; a igualdad de vueltas, menor tiempo
-        mine = (-me["LapsCompleted"], me["FinishTime"] + diff)
+        mine = (-laps_done, me["FinishTime"] + diff)
         rivals = a[a["Driver"] != driver]
-        est = 1 + sum(1 for l, t in zip(rivals["LapsCompleted"], rivals["FinishTime"]) if (-l, t) < mine)
+        est = 1 + sum(1 for lp, t in zip(rivals["LapsCompleted"], rivals["FinishTime"]) if (-lp, t) < mine)
         real_pos = int(me["AuditedPosition"])
-        pos_txt = f"P{real_pos} → P{est}"
+        tone = "gain" if diff < -0.05 else "loss" if diff > 0.05 else None
 
         kpis = [
-            kpi("Alternativa frente a la real", _fmt_delta(diff),
-                "más rápida" if diff < 0 else ("más lenta" if diff > 0 else "igual")),
-            kpi("Posición estimada", pos_txt, "frente a los tiempos reales de los rivales"),
-            kpi("Strategy Delta del piloto", f"{me['StrategyDelta']:.1f} s", f"mejor: {me['BestStrategy']}"),
+            kpi("Alternativa frente a la real", fmt_s(diff, signed=True),
+                "más rápida" if diff < -0.05 else ("más lenta" if diff > 0.05 else "igual"), tone=tone),
+            kpi("Posición estimada", f"{fmt_pos(real_pos)} → {fmt_pos(est)}",
+                "frente a los tiempos reales de los rivales",
+                tone="gain" if est < real_pos else "loss" if est > real_pos else None),
+            kpi("Strategy Delta del piloto", fmt_s(me["StrategyDelta"]), f"mejor: {me['BestStrategy']}"),
         ]
+        if diff < -0.05:
+            title = f"Con esta estrategia, {name} habría ganado {fmt_s(-diff)}" + \
+                    (f" y acabado {fmt_pos(est)}" if est != real_pos else "")
+        elif diff > 0.05:
+            title = f"Con esta estrategia, {name} habría perdido {fmt_s(diff)}" + \
+                    (f" y acabado {fmt_pos(est)}" if est != real_pos else "")
+        else:
+            title = f"Esta es la estrategia que eligió {name}: cambia una parada o un compuesto"
+
         stops_alt = list(np.cumsum([n for _, n in alt])[:-1])
         stops_real = list(np.cumsum([n for _, n in actual])[:-1])
         real_laps = store.laps[(store.laps["Round"] == rnd) & (store.laps["Driver"] == driver)]
-        mask_alt = np.isin(np.arange(1, total + 1), stops_alt)
-        mask_real = np.isin(np.arange(1, total + 1), stops_real)
-        warn = html.Ul([html.Li(w) for w in warnings]) if warnings else ""
+        idx = np.arange(1, laps_done + 1)
         return (kpis, F.whatif_gap(gap, stops_alt, stops_real),
-                F.whatif_laps(real_laps, sim_alt, sim_real, mask_alt, mask_real), warn)
+                F.whatif_laps(real_laps, sim_alt, sim_real, np.isin(idx, stops_alt), np.isin(idx, stops_real)),
+                _warning(warnings), title, sub)
 
     # ------------------------------------------------------------------ Temporada
     @app.callback(
-        Output("season-teams", "figure"), Output("season-positions", "figure"),
-        Output("season-evolution", "figure"), Output("season-heatmap", "figure"),
-        Input("tabs", "value"),
+        Output("season-teams", "figure"), Output("season-teams-card-title", "children"),
+        Output("season-teams-card-sub", "children"),
+        Output("season-positions", "figure"), Output("season-positions-card-title", "children"),
+        Output("season-positions-card-sub", "children"),
+        Output("season-evolution", "figure"), Output("season-evolution-card-title", "children"),
+        Output("season-evolution-card-sub", "children"),
+        Output("season-heatmap", "figure"), Output("season-heatmap-card-title", "children"),
+        Output("season-heatmap-card-sub", "children"),
+        Input("tabs", "value"), Input("season-focus", "value"),
     )
-    def update_season(tab):
+    def update_season(tab, focus):
         if tab != "season":
-            return (no_update,) * 4
+            return (no_update,) * 12
         a = store.audit
-        pos = (a.groupby("Driver").agg(P=("PositionsLost", "sum"), Team=("Team", "first"))
-               .query("P > 0").sort_values("P").tail(12))
-        fig_pos = go.Figure(go.Bar(
-            x=pos["P"], y=pos.index, orientation="h", marker=dict(color=F.ACCENT, cornerradius=4),
-            text=pos["P"], textposition="outside", textfont=dict(color=F.TEXT_2), customdata=pos["Team"],
-            hovertemplate="<b>%{y}</b> · %{customdata}<br>%{x} posiciones<extra></extra>",
-        ))
-        fig_pos.update_xaxes(title_text="Posiciones perdidas por estrategia (temporada)")
-        fig_pos = F._base(fig_pos, height=max(360, 30 * len(pos) + 80))
-        return (F.team_ranking(a), fig_pos, F.team_evolution(a, race_names), F.season_heatmap(a, race_names))
+        teams = a.groupby("Team")["StrategyDelta"].mean().sort_values()
+        if focus in teams.index:
+            rank = list(teams.index).index(focus) + 1
+            teams_title = f"{focus} fue {rank}.º de {len(teams)} en acierto estratégico ({fmt_s(teams[focus])} de media)"
+        else:
+            teams_title = f"{teams.index[0]} fue el equipo que mejor acertó con la estrategia ({fmt_s(teams.iloc[0])} de media)"
+        teams_sub = "Strategy Delta medio por piloto y carrera (s) · menos es mejor"
+
+        pos = a.groupby("Driver").agg(P=("PositionsLost", "sum"), Name=("FullName", "first"), Team=("Team", "first"))
+        top = pos.sort_values("P").iloc[-1]
+        focus_driver = None
+        pos_title = f"{_surname(top['Name'])} fue quien más posiciones perdió por estrategia: {int(top['P'])} en la temporada"
+        if focus in teams.index:
+            team_pos = pos[pos["Team"] == focus]
+            pos_title = f"Los pilotos de {focus} perdieron {int(team_pos['P'].sum())} posiciones por estrategia"
+            focus_driver = team_pos["P"].idxmax() if len(team_pos) else None
+        pos_sub = "Posiciones que habrían ganado con la mejor estrategia (suma de la temporada) · 12 pilotos con más pérdidas"
+
+        totals = a.groupby("Team")["StrategyDelta"].sum()
+        if focus in totals.index:
+            evo_title = f"{focus} acumuló {fmt_s(totals[focus], dec=0)} perdidos por estrategia en la temporada"
+        else:
+            evo_title = (f"{totals.idxmax()} fue el que más tiempo perdió ({fmt_s(totals.max(), dec=0)}); "
+                         f"{totals.idxmin()}, el que menos ({fmt_s(totals.min(), dec=0)})")
+        evo_sub = "Segundos perdidos acumulados carrera a carrera, suma de sus dos pilotos (s)"
+
+        by_race = a.groupby("Round")["StrategyDelta"].mean()
+        hardest = int(by_race.idxmax())
+        heat_title = f"La carrera más difícil de acertar fue el {race_names[hardest]}: {fmt_s(by_race.max())} perdidos de media"
+        heat_sub = "Strategy Delta por piloto y carrera (s) · más oscuro = más tiempo perdido · huecos: no auditado"
+
+        return (F.team_ranking(a, focus), teams_title, teams_sub,
+                F.positions_lost(a, focus_driver), pos_title, pos_sub,
+                F.team_evolution(a, race_names, race_abbr, focus), evo_title, evo_sub,
+                F.season_heatmap(a, race_names, race_abbr), heat_title, heat_sub)

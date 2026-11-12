@@ -8,7 +8,7 @@ from functools import lru_cache
 import numpy as np
 import pandas as pd
 
-from strategy_audit.config import PROCESSED_DIR, SEASON
+from strategy_audit.config import GP_ABBR, GP_ES, PROCESSED_DIR, SEASON
 from strategy_audit.models.pace_model import RaceModel, model_from_frames
 from strategy_audit.simulation.simulator import pit_loss_by_lap
 
@@ -39,8 +39,17 @@ class Store:
         r = self.races[self.races["Round"] == rnd]
         return str(r["EventName"].iloc[0]) if len(r) else f"Ronda {rnd}"
 
+    def race_es(self, rnd: int) -> str:
+        """Nombre del GP en español (p. ej. «GP de Mónaco»)."""
+        name = self.race_name(rnd)
+        return GP_ES.get(name, name)
+
+    def race_abbr(self, rnd: int) -> str:
+        name = self.race_name(rnd)
+        return GP_ABBR.get(name, name[:3].upper())
+
     def race_options(self) -> list[dict]:
-        return [{"label": f"R{r:02d} · {self.race_name(r)}", "value": r} for r in self.audited_rounds]
+        return [{"label": f"R{r:02d} · {self.race_es(r)}", "value": r} for r in self.audited_rounds]
 
     def race_row(self, rnd: int) -> pd.Series:
         return self.races[self.races["Round"] == rnd].iloc[0]

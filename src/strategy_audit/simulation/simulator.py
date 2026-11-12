@@ -22,6 +22,8 @@ import numpy as np
 from strategy_audit.models.pace_model import RaceModel
 
 MIN_STINT = 5
+# Iniciales en español: Blando, Medio, Duro, Intermedio, Lluvia
+COMPOUND_INITIAL = {"SOFT": "B", "MEDIUM": "M", "HARD": "D", "INTERMEDIATE": "I", "WET": "LL"}
 STINT_MARGIN = 1.10
 
 
@@ -42,7 +44,7 @@ class Strategy:
         lap = 0
         for i, (c, n) in enumerate(self.stints):
             lap += n
-            parts.append(c[0] + (f" ({lap})" if i < len(self.stints) - 1 else ""))
+            parts.append(COMPOUND_INITIAL.get(c, c[0]) + (f" (V{lap})" if i < len(self.stints) - 1 else ""))
         return " → ".join(parts)
 
 

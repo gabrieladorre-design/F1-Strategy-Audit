@@ -61,6 +61,7 @@ def audit_race(model: RaceModel, laps: pd.DataFrame, stints: pd.DataFrame, resul
         r = res.loc[drv] if drv in res.index else None
         rows.append({
             "Round": rnd, "Driver": drv,
+            "FullName": r["FullName"] if r is not None else drv,
             "Team": r["TeamName"] if r is not None else None,
             "TeamColor": ("#" + str(r["TeamColor"])) if r is not None and pd.notna(r["TeamColor"]) else "#888888",
             "GridPosition": r["GridPosition"] if r is not None else np.nan,

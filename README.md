@@ -87,7 +87,7 @@ F1-Strategy-Audit/
 │   ├── processing/            # Limpieza, stints, vueltas con SC/VSC
 │   ├── models/                # Modelo de ritmo y pérdida en boxes
 │   ├── simulation/            # Simulador de estrategias y Strategy Delta
-│   ├── dashboard/             # Datos, figuras, layout y callbacks de Dash
+│   ├── dashboard/             # Datos, tema visual (theme.py), figuras, layout y callbacks de Dash
 │   └── pipeline.py            # Orquestación del paso 2
 └── tests/                     # pytest con carreras sintéticas de parámetros conocidos
 ```
