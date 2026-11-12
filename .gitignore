@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.DS_Store
+.pytest_cache/
+.ipynb_checkpoints/
+# Caché de FastF1 (pesada, se regenera)
+data/cache/
