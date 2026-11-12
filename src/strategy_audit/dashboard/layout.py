@@ -163,6 +163,10 @@ La posición estimada compara el tiempo real menos el delta con los tiempos real
 - Es una auditoría *a posteriori*: la mejor estrategia «sabe» cuándo hubo Safety Car.
 - Se asume neumático nuevo en cada parada (no se sabe qué juegos le quedaban a cada piloto).
 - Degradación lineal; una degradación estimada negativa (pista que mejora) se trunca a 0.
+- No se modelan el calentamiento del neumático ni la salida: el modelo tiende a preferir empezar con duro.
+- En circuitos sin adelantamientos (Mónaco, Singapur) el ritmo está limitado por el tráfico y el error es mayor.
+- Reglas especiales de 2025 incluidas: dos paradas obligatorias en Mónaco y máximo de 25 vueltas por juego en Qatar.
+- Pilotos sin datos de compuesto en parte de la carrera (p. ej. Miami) no se auditan.
 """)]),
     ])
 

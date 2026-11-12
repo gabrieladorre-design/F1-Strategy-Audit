@@ -221,7 +221,8 @@ def team_evolution(audit: pd.DataFrame, race_names: dict[int, str]) -> go.Figure
             line=dict(color=g["Color"].iloc[0], width=2), marker=dict(size=8, line=dict(color=PANEL, width=2)),
             hovertemplate=f"<b>{team}</b><br>%{{x}}<br>Acumulado: %{{y:.1f}} s<extra></extra>",
         ))
-    fig.update_xaxes(tickangle=-45)
+    order = [race_names.get(int(r), str(r)) for r in sorted(t["Round"].unique())]
+    fig.update_xaxes(tickangle=-45, categoryorder="array", categoryarray=order)
     fig.update_yaxes(title_text="Segundos perdidos acumulados")
     fig.update_layout(legend=dict(orientation="v", x=1.02, y=1, xanchor="left", yanchor="top"))
     fig = _base(fig, height=460)
