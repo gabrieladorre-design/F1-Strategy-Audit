@@ -36,17 +36,22 @@ Usuarios objetivo: aficionados avanzados, periodistas y creadores de contenido, 
 ## Arquitectura
 
 ```
-FastF1 / Jolpica-F1
+FastF1 (tiempos por vuelta, neumáticos, boxes, estado de pista)
+        │   scripts/download_data.py   (necesita Internet, carga incremental)
+        ▼
+data/raw/*.parquet
+        │   scripts/build_dataset.py   (sin conexión)
+        ▼
+Limpieza ─► Modelo de ritmo ─► Pérdida en boxes ─► Simulador ─► Strategy Delta
         │
         ▼
-Pipeline ETL (extracción · limpieza · variables)
-        │
-        ▼
-PostgreSQL ──► Motor de análisis (modelo de ritmo · pit loss · simulador · Strategy Delta)
-                        │
-                        ▼
-               Dashboard (Dash + Plotly)      [ampliación: API FastAPI · asistente IA]
+data/processed/*.parquet  ──►  Dashboard Dash + Plotly  ──►  Render (URL pública)
 ```
+
+**Decisión de diseño (noviembre 2026):** la propuesta preveía PostgreSQL. Como todo el cálculo
+pesado se hace *offline* y la aplicación solo lee resultados, se sustituye por ficheros Parquet
+versionados en el repositorio. Ventajas: despliegue gratuito y sin servicios externos en Render,
+arranque rápido y resultados reproducibles. PostgreSQL queda como ampliación.
 
 **Limitación asumida:** el simulador no modela la interacción entre coches (tráfico, adelantamientos); la posición resultante se aproxima comparando tiempos con los rivales.
 
@@ -59,33 +64,55 @@ PostgreSQL ──► Motor de análisis (modelo de ritmo · pit loss · simulado
 
 ## Stack tecnológico
 
-Python 3.11 · pandas · FastF1 · SQLAlchemy · PostgreSQL · scikit-learn · Dash / Plotly · pytest
+Python 3.12 · pandas · NumPy · FastF1 · Parquet (pyarrow) · Dash / Plotly · pytest · gunicorn · Render
 
-Opcional: LightGBM · FastAPI · Docker Compose · API de un modelo de lenguaje
-
-## Estructura prevista del repositorio
+## Estructura del repositorio
 
 ```
-f1-strategy-audit/
-├── README.md
-├── requirements.txt
-├── docker-compose.yml         # PostgreSQL
-├── .env.example               # Variables de entorno
-├── docs/
-│   └── Propuesta.pdf          # Propuesta del proyecto
-├── data/                      # Caché local de FastF1 (no se versiona)
-├── notebooks/                 # Análisis exploratorio
+F1-Strategy-Audit/
+├── app.py                     # Punto de entrada (local y gunicorn en Render)
+├── requirements.txt           # Dependencias de la app (Render)
+├── requirements-pipeline.txt  # + FastF1, scikit-learn, pytest (local)
+├── Procfile · render.yaml     # Despliegue en Render
+├── assets/style.css           # Estilos del dashboard
+├── data/
+│   ├── raw/                   # Datos descargados con FastF1 (Parquet)
+│   └── processed/             # Tablas que consume la app (Parquet)
+├── docs/                      # Propuesta
+├── scripts/
+│   ├── download_data.py       # Paso 1: descarga
+│   └── build_dataset.py       # Paso 2: modelo, simulación y auditoría
 ├── src/strategy_audit/
-│   ├── ingestion/             # Descarga de FastF1 y Jolpica
-│   ├── processing/            # Limpieza y generación de variables
-│   ├── db/                    # Modelos SQLAlchemy y carga en PostgreSQL
-│   ├── models/                # Modelo de ritmo y pérdida en pit lane
+│   ├── ingestion/             # Descarga con FastF1
+│   ├── processing/            # Limpieza, stints, vueltas con SC/VSC
+│   ├── models/                # Modelo de ritmo y pérdida en boxes
 │   ├── simulation/            # Simulador de estrategias y Strategy Delta
-│   ├── api/                   # (Opcional) API REST con FastAPI
-│   ├── dashboard/             # Aplicación Dash
-│   └── assistant/             # (Opcional) Asistente de IA
-└── tests/
+│   ├── dashboard/             # Datos, figuras, layout y callbacks de Dash
+│   └── pipeline.py            # Orquestación del paso 2
+└── tests/                     # pytest con carreras sintéticas de parámetros conocidos
 ```
+
+## Cómo ejecutarlo
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-pipeline.txt
+
+python scripts/download_data.py --season 2025   # descarga (≈15 min la primera vez)
+python scripts/build_dataset.py --season 2025   # modelo + auditoría
+python app.py                                   # http://127.0.0.1:8050
+pytest                                          # tests
+```
+
+## Método
+
+| Paso | Qué hace |
+|---|---|
+| Limpieza | Excluye vuelta 1, vueltas de entrada/salida de boxes, SC/VSC/roja, atípicas (> 5 % sobre la mediana del piloto) y carreras con lluvia |
+| Modelo de ritmo | Por carrera: `tiempo = ritmo piloto + offset compuesto + degradación compuesto × edad neumático + combustible × vuelta` (mínimos cuadrados). Validación cruzada dejando fuera stints completos |
+| Pérdida en boxes | Mediana del tiempo extra de vueltas de entrada + salida frente al modelo, con bandera verde. Con SC/VSC cuenta la mitad |
+| Simulador | Todas las estrategias de 1 y 2 paradas que usan ≥ 2 compuestos y no superan el stint más largo observado; vectorizado con NumPy |
+| Strategy Delta | Tiempo simulado con la estrategia real − tiempo simulado con la mejor. Posición estimada frente a los tiempos reales de los rivales |
 
 ## Plan de trabajo inicial
 
@@ -103,12 +130,13 @@ Planificación para un cuatrimestre (10 semanas desde la propuesta).
 ### Hitos
 
 - [x] Propuesta y repositorio
-- [ ] Base de datos con 2025 y 2026
-- [ ] Modelo de ritmo validado
-- [ ] Simulador validado y Strategy Delta calculado
-- [ ] Dashboard MVP
+- [x] Pipeline de datos y modelo implementados (2025)
+- [ ] Datos reales 2025 descargados y modelo validado
+- [x] Simulador y Strategy Delta (con tests)
+- [x] Dashboard MVP (carrera, ¿y si…?, temporada, metodología)
 - [ ] Aplicación desplegada en una URL pública
-- [ ] Entrega final
+- [ ] Presentación (26/30 nov 2026)
+- [ ] Ampliaciones: temporada 2026, PostgreSQL, API, asistente IA
 
 
 
