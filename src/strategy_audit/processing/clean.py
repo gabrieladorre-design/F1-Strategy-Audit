@@ -40,16 +40,33 @@ def prepare_laps(laps: pd.DataFrame, races: pd.DataFrame) -> pd.DataFrame:
     df = df.sort_values(["Round", "Driver", "LapNumber"]).reset_index(drop=True)
 
     df["LapNumber"] = df["LapNumber"].astype(int)
+    # Compuestos desconocidos ('nan', None…): huecos a mitad de stint se rellenan con el
+    # anterior; si se desconoce desde el inicio, queda como UNKNOWN y ese piloto no se audita
+    known = df["Compound"].where(df["Compound"].isin(DRY_COMPOUNDS + WET_COMPOUNDS))
+    df["Compound"] = known.groupby([df["Round"], df["Driver"]]).ffill().fillna("UNKNOWN")
     df["LapsRemaining"] = df["TotalLaps"] - df["LapNumber"]
-    df["IsPitIn"] = df["PitInTime"].notna()
-    df["IsPitOut"] = df["PitOutTime"].notna()
+    raw_pit_in = df["PitInTime"].notna()
+    raw_pit_out = df["PitOutTime"].notna()
     df["Neutralised"] = df["TrackStatus"].map(is_neutralised)
-    deleted = df["Deleted"].fillna(False).astype(bool) if "Deleted" in df else False
+    deleted = df["Deleted"].astype("boolean").fillna(False).astype(bool) if "Deleted" in df else False
+
+    # Stints reconstruidos: FastF1 a veces marca «paradas» falsas (p. ej. vueltas tras
+    # la bandera a cuadros bajo SC). Un stint nuevo solo empieza si cambia el compuesto
+    # o la edad del neumático se reinicia.
+    g = df.groupby(["Round", "Driver"])
+    new_stint = (
+        (df["Compound"] != g["Compound"].shift())
+        | (df["TyreLife"] < g["TyreLife"].shift())
+    )
+    df["Stint"] = new_stint.astype(int).groupby([df["Round"], df["Driver"]]).cumsum()
+    next_new = new_stint.groupby([df["Round"], df["Driver"]]).shift(-1).astype("boolean").fillna(False).astype(bool)
+    df["IsPitIn"] = raw_pit_in & next_new
+    df["IsPitOut"] = raw_pit_out & new_stint & (df["LapNumber"] > 1)
 
     candidate = (
         (df["LapNumber"] > 1)
-        & ~df["IsPitIn"]
-        & ~df["IsPitOut"]
+        & ~raw_pit_in
+        & ~raw_pit_out
         & ~df["Neutralised"]
         & df["LapTime"].notna()
         & df["TyreLife"].notna()
