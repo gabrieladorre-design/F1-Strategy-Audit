@@ -16,7 +16,7 @@ DRIVERS = {
     "VER": ("Red Bull Racing", 90.0, [("MEDIUM", 25), ("HARD", 35)]),
     "NOR": ("McLaren", 90.1, [("MEDIUM", 22), ("HARD", 38)]),
     "LEC": ("Ferrari", 90.3, [("SOFT", 15), ("HARD", 25), ("MEDIUM", 20)]),
-    "HAM": ("Ferrari", 90.4, [("HARD", 35), ("MEDIUM", 25)]),
+    "HAM": ("Ferrari", 90.4, [("SOFT", 14), ("HARD", 21), ("MEDIUM", 25)]),
     "RUS": ("Mercedes", 90.35, [("MEDIUM", 30), ("HARD", 30)]),
     "ALO": ("Aston Martin", 90.9, [("SOFT", 10), ("HARD", 50)]),
 }

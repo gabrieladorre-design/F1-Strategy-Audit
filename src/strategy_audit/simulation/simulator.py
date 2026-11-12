@@ -56,7 +56,8 @@ def stint_cost(model: RaceModel, compound: str, n: int, start_age: int) -> float
 
 
 def max_stint(model: RaceModel, compound: str) -> int:
-    return int(math.ceil(model.max_stint.get(compound, 0) * STINT_MARGIN))
+    limit = int(math.ceil(model.max_stint.get(compound, 0) * STINT_MARGIN))
+    return min(limit, model.tyre_limit) if model.tyre_limit else limit
 
 
 def pit_loss_by_lap(total_laps: int, pit_loss: float, neutralised: set[int], sc_factor: float = 0.5) -> np.ndarray:
@@ -83,9 +84,11 @@ def strategy_cost(model: RaceModel, stints: list[tuple[str, int]], first_age: in
 def is_feasible(model: RaceModel, stints: list[tuple[str, int]], first_age: int) -> bool:
     if len({c for c, _ in stints}) < 2:          # reglamento: dos compuestos de seco
         return False
+    if len(stints) - 1 < model.min_stops:
+        return False
     for i, (c, n) in enumerate(stints):
         age0 = first_age if i == 0 else 1
-        if n < MIN_STINT or c not in model.compound_deg or age0 + n - 1 > max_stint(model, c):
+        if n < MIN_STINT or c not in model.usable_compounds or age0 + n - 1 > max_stint(model, c):
             return False
     return True
 
@@ -106,13 +109,13 @@ def enumerate_strategies(model: RaceModel, total_laps: int, first_age: int,
     combinaciones de vueltas de parada.
     """
     N = total_laps
-    compounds = sorted(model.compound_deg)
+    compounds = model.usable_compounds
     first = {c: _stint_cost_array(model, c, N, first_age) for c in compounds}
     fresh = {c: _stint_cost_array(model, c, N, 1) for c in compounds}
     pl = pit_losses[: N + 1]
     out: list[Strategy] = []
 
-    if max_stops >= 1:
+    if max_stops >= 1 and model.min_stops <= 1:
         s = np.arange(N + 1)
         for c1, c2 in permutations(compounds, 2):
             total = first[c1][s] + fresh[c2][N - s] + pl[s]

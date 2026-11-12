@@ -111,3 +111,32 @@ def test_full_pipeline(tmp_path):
     assert len(audit) > 0
     assert (audit["StrategyDelta"] >= 0).all()
     assert np.isfinite(metrics["simulator_mae_s"])
+
+
+def test_false_pit_stops_do_not_split_stints():
+    """FastF1 a veces marca paradas falsas bajo SC al final: no deben crear stints nuevos."""
+    laps, _, race = make_race(1)
+    last = laps.index[(laps["Driver"] == "VER") & (laps["LapNumber"] >= 58)]
+    laps.loc[last, "PitInTime"] = 1.0
+    laps.loc[last, "PitOutTime"] = 1.0
+    prepared = prepare_laps(laps, pd.DataFrame([race]))
+    ver = actual_stints(prepared)
+    assert list(ver.loc[ver["Driver"] == "VER", "Laps"]) == [25, 35]
+
+
+def test_min_stops_rule(race1):
+    laps, _, _ = race1
+    model = fit_race(laps, 1)
+    model.min_stops = 2
+    pls = pit_loss_by_lap(60, 21.0, set())
+    assert all(s.stops >= 2 for s in enumerate_strategies(model, 60, 3, pls))
+
+
+def test_tyre_limit_rule(race1):
+    laps, _, _ = race1
+    model = fit_race(laps, 1)
+    model.tyre_limit = 25
+    pls = pit_loss_by_lap(60, 21.0, set())
+    for s in enumerate_strategies(model, 60, 3, pls):
+        ages = [(3 if i == 0 else 1) + n - 1 for i, (_, n) in enumerate(s.stints)]
+        assert max(ages) <= 25
