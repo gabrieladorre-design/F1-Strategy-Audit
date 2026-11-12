@@ -40,12 +40,18 @@ def audit_race(model: RaceModel, laps: pd.DataFrame, stints: pd.DataFrame, resul
 
     rows, best_rows = [], []
     for drv in model.driver_base:
-        if drv not in finish.index or finish.loc[drv, "LastLap"] < total_laps:
-            continue  # solo pilotos que completaron toda la distancia
-        actual, first_age = driver_actual_strategy(stints, rnd, drv)
-        if any(c not in model.compound_deg for c, _ in actual) or sum(n for _, n in actual) != total_laps:
+        if drv not in finish.index:
             continue
-        candidates = enumerate_strategies(model, total_laps, first_age, pls)
+        status = str(res.loc[drv, "Status"]) if drv in res.index else ""
+        driver_laps = int(finish.loc[drv, "LastLap"])
+        # Pilotos clasificados: en la distancia completa o doblados («+1 Lap», «Lapped»)
+        finished = status == "Finished" or "Lap" in status
+        if not finished or driver_laps < total_laps - 3:
+            continue
+        actual, first_age = driver_actual_strategy(stints, rnd, drv)
+        if any(c not in model.compound_deg for c, _ in actual) or sum(n for _, n in actual) != driver_laps:
+            continue
+        candidates = enumerate_strategies(model, driver_laps, first_age, pls)
         if not candidates:
             continue
         best = candidates[0]
@@ -63,6 +69,7 @@ def audit_race(model: RaceModel, laps: pd.DataFrame, stints: pd.DataFrame, resul
             "BestStrategy": best.label(), "BestStops": best.stops,
             "StrategyDelta": round(delta, 2),
             "FinishTime": float(finish.loc[drv, "Finish"]),
+            "LapsCompleted": driver_laps,
             "FirstAge": first_age,
         })
         lap = 0
@@ -80,14 +87,16 @@ def audit_race(model: RaceModel, laps: pd.DataFrame, stints: pd.DataFrame, resul
 def _estimate_positions(audit: pd.DataFrame) -> pd.DataFrame:
     """Posición estimada con la mejor estrategia frente a los tiempos reales de los rivales."""
     audit = audit.copy()
+    # Orden de llegada: más vueltas primero y, a igualdad de vueltas, menor tiempo
+    key = list(zip(-audit["LapsCompleted"], audit["FinishTime"]))
     est = []
-    for _, row in audit.iterrows():
-        t = row["FinishTime"] - row["StrategyDelta"]
-        rivals = audit.loc[audit["Driver"] != row["Driver"], "FinishTime"]
-        est.append(int((rivals < t).sum()) + 1)
+    for i, row in audit.iterrows():
+        mine = (-row["LapsCompleted"], row["FinishTime"] - row["StrategyDelta"])
+        ahead = sum(1 for j, k in zip(audit.index, key) if j != i and k < mine)
+        est.append(ahead + 1)
     audit["EstPosition"] = est
     # Posición real entre los pilotos auditados (mismo universo que la estimada)
-    audit["AuditedPosition"] = audit["FinishTime"].rank(method="min").astype(int)
+    audit["AuditedPosition"] = [sum(1 for k2 in key if k2 < k) + 1 for k in key]
     audit["PositionsLost"] = audit["AuditedPosition"] - audit["EstPosition"]
     return audit
 

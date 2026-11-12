@@ -142,8 +142,10 @@ def register(app, store: Store) -> None:
 
         a = store.audit[(store.audit["Round"] == rnd)]
         me = a[a["Driver"] == driver].iloc[0]
-        t = me["FinishTime"] + diff
-        est = int((a.loc[a["Driver"] != driver, "FinishTime"] < t).sum()) + 1
+        # Orden de llegada: más vueltas primero; a igualdad de vueltas, menor tiempo
+        mine = (-me["LapsCompleted"], me["FinishTime"] + diff)
+        rivals = a[a["Driver"] != driver]
+        est = 1 + sum(1 for l, t in zip(rivals["LapsCompleted"], rivals["FinishTime"]) if (-l, t) < mine)
         real_pos = int(me["AuditedPosition"])
         pos_txt = f"P{real_pos} → P{est}"
 
