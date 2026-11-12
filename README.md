@@ -104,6 +104,15 @@ python app.py                                   # http://127.0.0.1:8050
 pytest                                          # tests
 ```
 
+## Resultados (temporada 2025)
+
+| Métrica | Valor |
+|---|---|
+| Carreras auditadas (en seco) | 21 de 24 |
+| Auditorías piloto-carrera | 351 |
+| Error del modelo de ritmo (MAE, stints no vistos) | 0,52 s por vuelta |
+| Error del simulador con la estrategia real (carreras sin SC) | 2,2 s en el tiempo total (≈ 0,04 %) |
+
 ## Método
 
 | Paso | Qué hace |
@@ -111,6 +120,7 @@ pytest                                          # tests
 | Limpieza | Excluye vuelta 1, vueltas de entrada/salida de boxes, SC/VSC/roja, atípicas (> 5 % sobre la mediana del piloto) y carreras con lluvia |
 | Modelo de ritmo | Por carrera: `tiempo = ritmo piloto + offset compuesto + degradación compuesto × edad neumático + combustible × vuelta` (mínimos cuadrados). Validación cruzada dejando fuera stints completos |
 | Pérdida en boxes | Mediana del tiempo extra de vueltas de entrada + salida frente al modelo, con bandera verde. Con SC/VSC cuenta la mitad |
+| Reglas 2025 | Dos paradas obligatorias en Mónaco y máximo de 25 vueltas por juego en Qatar |
 | Simulador | Todas las estrategias de 1 y 2 paradas que usan ≥ 2 compuestos y no superan el stint más largo observado; vectorizado con NumPy |
 | Strategy Delta | Tiempo simulado con la estrategia real − tiempo simulado con la mejor. Posición estimada frente a los tiempos reales de los rivales |
 
@@ -131,7 +141,7 @@ Planificación para un cuatrimestre (10 semanas desde la propuesta).
 
 - [x] Propuesta y repositorio
 - [x] Pipeline de datos y modelo implementados (2025)
-- [ ] Datos reales 2025 descargados y modelo validado
+- [x] Datos reales 2025 descargados (24 carreras, 26 689 vueltas) y modelo validado
 - [x] Simulador y Strategy Delta (con tests)
 - [x] Dashboard MVP (carrera, ¿y si…?, temporada, metodología)
 - [ ] Aplicación desplegada en una URL pública

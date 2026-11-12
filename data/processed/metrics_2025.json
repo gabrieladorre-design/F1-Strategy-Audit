@@ -1,0 +1,8 @@
+{
+  "season": 2025,
+  "races": 24,
+  "dry_races_modelled": 21,
+  "pace_model_mae_cv_s": 0.5191408713441206,
+  "simulator_mae_s": 2.244533537629332,
+  "audited_driver_races": 351
+}
