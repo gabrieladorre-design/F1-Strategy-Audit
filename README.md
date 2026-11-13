@@ -1,5 +1,7 @@
 # 🏁 F1 Strategy Audit
 
+[![Tests](https://github.com/gabrieladorre-design/F1-Strategy-Audit/actions/workflows/tests.yml/badge.svg)](https://github.com/gabrieladorre-design/F1-Strategy-Audit/actions/workflows/tests.yml)
+
 Proyecto de la asignatura *Desarrollo de Aplicaciones para la Visualización de Datos* (curso 2026-2027), ICAI-ICADE, Universidad Pontificia Comillas.
 
 Gabriela De Dorremochea
@@ -114,6 +116,16 @@ pytest                                          # tests
 | Auditorías piloto-carrera | 351 |
 | Error del modelo de ritmo (MAE, stints no vistos) | 0,52 s por vuelta |
 | Error del simulador con la estrategia real (carreras sin SC) | 2,2 s en el tiempo total (≈ 0,04 %) |
+
+## Despliegue y CI/CD
+
+- **Render** (plan gratuito): cada `git push` a `main` vuelve a desplegar la app
+  (`gunicorn --timeout 600 app:server`). El pie de página muestra el commit desplegado.
+- **GitHub Actions** (`.github/workflows/tests.yml`): en cada push se ejecutan los tests y se
+  comprueba que la app arranca con los datos del repositorio.
+- Tras un despliegue, recarga la página (Cmd + Shift + R): una pestaña abierta con la versión
+  anterior pide callbacks que ya no existen en el servidor.
+- El plan gratuito se duerme tras un rato sin visitas; la primera carga tarda ~50 s.
 
 ## Método
 

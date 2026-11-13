@@ -1,10 +1,15 @@
 """Estructura visual (HTML + componentes Dash) de la aplicación."""
 from __future__ import annotations
 
+import os
+
 from dash import dcc, html
 
 from strategy_audit.dashboard.data import Store
 from strategy_audit.dashboard.theme import ACCENT, GRAPH_CONFIG, fmt_num, fmt_s
+
+# Commit desplegado (Render lo expone en RENDER_GIT_COMMIT): permite comprobar qué versión está en línea
+APP_VERSION = os.environ.get("RENDER_GIT_COMMIT", "")[:7]
 
 COMPOUND_OPTIONS = [{"label": "Blando", "value": "SOFT"},
                     {"label": "Medio", "value": "MEDIUM"},
@@ -204,5 +209,6 @@ def build_layout(store: Store | None) -> html.Div:
             "Proyecto de Desarrollo de Aplicaciones para la Visualización de Datos · ICAI-ICADE · ",
             html.A("Código en GitHub", href="https://github.com/gabrieladorre-design/F1-Strategy-Audit", target="_blank"),
             " · Datos: FastF1. Proyecto no oficial, sin relación con la Fórmula 1.",
+            html.Span(f" · Versión {APP_VERSION}", className="version") if APP_VERSION else None,
         ]),
     ])
