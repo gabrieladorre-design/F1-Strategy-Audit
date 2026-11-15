@@ -72,6 +72,7 @@ def race_tab(store: Store) -> html.Div:
         ]),
         html.Div(id="race-kpis", className="kpis kpis-small"),
         card("", [graph("race-stints")], id_="race-stints-card"),
+        card("", [graph("race-trace")], id_="race-trace-card"),
         html.Div(className="grid-2", children=[
             card("", [graph("race-delta")], id_="race-delta-card"),
             card("", [graph("race-deg")], id_="race-deg-card"),
@@ -119,6 +120,7 @@ def whatif_tab(store: Store) -> html.Div:
             html.Div(className="whatif-results", children=[
                 html.Div(id="wi-kpis", className="kpis kpis-small"),
                 card("", [graph("wi-gap")], id_="wi-gap-card"),
+                card("", [graph("wi-window")], id_="wi-window-card"),
                 card("Ritmo vuelta a vuelta: real frente al modelo", [graph("wi-laps")],
                      "Tiempo por vuelta (s) · puntos = real, discontinua = modelo con la estrategia real, "
                      "roja = alternativa"),
@@ -144,11 +146,39 @@ def season_tab(store: Store) -> html.Div:
     ])
 
 
+def validation_cards(store: Store) -> html.Div:
+    """Gráficos de validación del modelo (estáticos: se calculan una vez al arrancar)."""
+    from strategy_audit.dashboard import figures as F
+
+    rounds = store.audited_rounds
+    names = {r: store.race_es(r) for r in rounds}
+    abbr = {r: store.race_abbr(r) for r in rounds}
+    r = store.races.dropna(subset=["MAE_cv"])
+    worst = r.loc[r["MAE_cv"].idxmax()]
+    gap = float((r["MAE_cv"] - r["MAE_train"]).median())
+    res = store.laps[store.laps["IsClean"] & store.laps["Predicted"].notna()]
+    bias = float((res["LapTime"] - res["Predicted"]).median())
+    def static(fig):   # figura fija: con «responsive» necesita una altura explícita en el contenedor
+        return dcc.Graph(figure=fig, config=GRAPH_CONFIG, style={"height": f"{fig.layout.height}px"})
+
+    return html.Div(className="grid-2 method-wide", children=[
+        card(f"El error solo sube {fmt_s(gap, dec=2)} por vuelta al validar con stints no vistos; "
+             f"el {names.get(int(worst['Round']), '')} es la excepción",
+             [static(F.model_error_by_race(store.races, abbr, names))],
+             "Error absoluto medio por vuelta (s) · círculo: vueltas del ajuste, rojo: validación cruzada "
+             "dejando fuera stints completos"),
+        card(f"Los residuos están centrados en cero en todos los compuestos (mediana {fmt_s(bias, dec=2, signed=True)})",
+             [static(F.residuals_by_compound(store.laps))],
+             "Real − modelo en vueltas limpias (s) · línea discontinua: media · sin sesgo por compuesto"),
+    ])
+
+
 def method_tab(store: Store) -> html.Div:
     m = store.metrics
     mae = fmt_s(m.get("pace_model_mae_cv_s", float("nan")), dec=2)
     sim = fmt_s(m.get("simulator_mae_s", float("nan")))
     return html.Div(className="tab-body method", children=[
+        validation_cards(store),
         card("Cómo se audita cada estrategia", [dcc.Markdown(f"""
 **1 · Datos.** Tiempos por vuelta, neumáticos, paradas y estado de pista de cada carrera de {store.season}
 con [FastF1](https://docs.fastf1.dev/). Se excluyen la vuelta 1, las vueltas de entrada y salida de boxes,

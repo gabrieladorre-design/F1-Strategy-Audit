@@ -103,6 +103,7 @@ label {
 
 /* Metodología */
 .method .card { max-width: 900px; }
+.method .method-wide .card { max-width: none; }
 .method p, .method li { line-height: 1.6; color: var(--text-2); }
 .method code { background: var(--panel-2); padding: 2px 6px; border-radius: 4px; color: var(--text); }
 .method strong { color: var(--text); }

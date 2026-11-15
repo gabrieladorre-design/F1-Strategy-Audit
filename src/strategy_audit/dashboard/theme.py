@@ -28,6 +28,8 @@ NEUTRAL_BAND = "#E8A317"  # SC/VSC (siempre con opacidad 0,10-0,15)
 
 # Escala secuencial de un solo tono (Strategy Delta, mapas de calor)
 SEQ_RED = [[0, "#FBEDEE"], [0.5, "#E0566A"], [1, "#7A0A1C"]]
+# Ventana de parada: verde en el óptimo y rojo creciente al alejarse (s perdidos)
+WINDOW_SCALE = [[0, "#1E7F4F"], [0.07, "#DDEFE4"], [0.25, "#FBEDEE"], [0.6, "#E0566A"], [1, "#7A0A1C"]]
 
 FONT = "'Titillium Web', -apple-system, 'Segoe UI', Roboto, sans-serif"
 

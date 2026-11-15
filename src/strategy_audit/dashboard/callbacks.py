@@ -23,6 +23,66 @@ def _warning(items: list[str]):
     return html.Div(className="warning", children=html.Ul([html.Li(w) for w in items]))
 
 
+def _trace_texts(audit, laps, focus, gp) -> tuple[str, str]:
+    """Título-conclusión y subtítulo del gráfico de evolución de carrera."""
+    a = audit.set_index("Driver")
+    winner = a["AuditedPosition"].idxmin()
+    lead = a[a["LapsCompleted"] == a["LapsCompleted"].max()].sort_values("FinishTime")
+    if focus in a.index and focus != winner:
+        me = a.loc[focus]
+        if me["LapsCompleted"] < a.loc[winner, "LapsCompleted"]:
+            behind = int(a.loc[winner, "LapsCompleted"] - me["LapsCompleted"])
+            title = (f"{_surname(me['FullName'])} acabó {fmt_pos(me['AuditedPosition'])}, "
+                     f"a {behind} vuelta{'s' if behind > 1 else ''} del ganador")
+        else:
+            title = (f"{_surname(me['FullName'])} acabó {fmt_pos(me['AuditedPosition'])}, "
+                     f"a {fmt_s(me['FinishTime'] - a.loc[winner, 'FinishTime'])} de "
+                     f"{_surname(a.loc[winner, 'FullName'])}")
+    elif len(lead) > 1:
+        margin = float(lead["FinishTime"].iloc[1] - lead["FinishTime"].iloc[0])
+        title = (f"{_surname(a.loc[winner, 'FullName'])} ganó el {gp} con {fmt_s(margin)} "
+                 f"sobre {_surname(lead['FullName'].iloc[1])}")
+    else:
+        title = f"{_surname(a.loc[winner, 'FullName'])} ganó el {gp}"
+    sub = ("Diferencia con el ritmo medio del ganador (s) · subir = más rápido que él, "
+           "cada escalón es una parada (círculo = neumático montado)")
+    return title, sub
+
+
+def _window(model, laps_done, first_age, pls, alt, actual):
+    """Ventana de parada: curvas (1 parada) o mapa de calor (2 paradas) para los compuestos elegidos."""
+    tol = 1.0
+    if len(alt) == 2:
+        win = F.pit_window_curves(model, laps_done, first_age, pls)
+        pair = (alt[0][0], alt[1][0])
+        real_stop = actual[0][1] if len(actual) == 2 else None
+        fig = F.pit_window(win, pair, alt[0][1], real_stop, tol)
+        curve = win["curves"].get(pair)
+        rng = F.window_range(curve, tol)
+        label = f"{COMPOUND_ES[pair[0]]} → {COMPOUND_ES[pair[1]]}".lower().capitalize()
+        if rng is None:
+            title = f"{label} no es una estrategia factible a 1 parada en esta carrera"
+        else:
+            best_lap = int(np.nanargmin(curve))
+            title = (f"{label}: parar entre las vueltas {rng[0]} y {rng[1]} cuesta menos de "
+                     f"{fmt_s(tol, dec=0)} más que hacerlo en la {best_lap}")
+        sub = ("Tiempo perdido frente a la mejor estrategia simulada (s) según la vuelta de parada · "
+               "una curva por combinación de compuestos · ✕ = tu parada")
+        return fig, title, sub
+    comps = tuple(c for c, _ in alt)
+    stops = tuple(int(x) for x in np.cumsum([n for _, n in alt])[:-1])
+    fig, info = F.pit_window_2stop(model, laps_done, first_age, pls, comps, stops)
+    label = " → ".join(COMPOUND_ES[c] for c in comps).lower().capitalize()
+    if not info["ok"]:
+        return fig, f"{label} no es factible a 2 paradas en esta carrera", ""
+    i, j = info["best"]
+    title = (f"Con {label.lower()}, lo mejor era parar en las vueltas {i} y {j} "
+             f"({fmt_s(info['loss'], signed=True)} frente al óptimo global)")
+    sub = ("Tiempo perdido frente a la mejor estrategia simulada (s) para cada par de vueltas de parada · "
+           "contorno: a menos de 1 s de ese mínimo · ✕ = tu estrategia")
+    return fig, title, sub
+
+
 def register(app, store: Store) -> None:
     race_names = {r: store.race_es(r) for r in store.audited_rounds}
     race_abbr = {r: store.race_abbr(r) for r in store.audited_rounds}
@@ -44,12 +104,14 @@ def register(app, store: Store) -> None:
         Output("race-delta-card-sub", "children"),
         Output("race-deg", "figure"), Output("race-deg-card-title", "children"),
         Output("race-deg-card-sub", "children"),
+        Output("race-trace", "figure"), Output("race-trace-card-title", "children"),
+        Output("race-trace-card-sub", "children"),
         Input("race-dd", "value"), Input("race-focus", "value"),
     )
     def update_race(rnd, focus):
         if rnd is None:
             msg = "Elige un Gran Premio para ver su auditoría"
-            return [], F.empty(msg), "", "", F.empty(msg), "", "", F.empty(msg), "", ""
+            return [], F.empty(msg), "", "", F.empty(msg), "", "", F.empty(msg), "", "", F.empty(msg), "", ""
         row = store.race_row(rnd)
         gp = store.race_es(rnd)
         audit = store.audit[store.audit["Round"] == rnd].sort_values("AuditedPosition")
@@ -92,10 +154,12 @@ def register(app, store: Store) -> None:
         deg_sub = "Vueltas limpias corregidas por piloto y combustible · recta = degradación del modelo"
 
         laps = store.laps[store.laps["Round"] == rnd]
+        trace_title, trace_sub = _trace_texts(audit, laps, focus, gp)
         return (kpis,
                 F.stint_comparison(actual, best, order, neutral, int(row["TotalLaps"]), focus), stints_title, stints_sub,
                 F.delta_bars(audit, focus), delta_title, delta_sub,
-                F.degradation(laps, model), deg_title, deg_sub)
+                F.degradation(laps, model), deg_title, deg_sub,
+                F.race_trace(laps, audit, actual, neutral, int(row["TotalLaps"]), focus), trace_title, trace_sub)
 
     # ------------------------------------------------------------------ ¿Y si…?
     @app.callback(
@@ -146,6 +210,8 @@ def register(app, store: Store) -> None:
         Output("wi-kpis", "children"), Output("wi-gap", "figure"), Output("wi-laps", "figure"),
         Output("wi-warning", "children"),
         Output("wi-gap-card-title", "children"), Output("wi-gap-card-sub", "children"),
+        Output("wi-window", "figure"), Output("wi-window-card-title", "children"),
+        Output("wi-window-card-sub", "children"),
         Input("wi-stops", "value"), Input("wi-c1", "value"), Input("wi-c2", "value"), Input("wi-c3", "value"),
         Input("wi-s1", "value"), Input("wi-s2", "value"),
         State("wi-race", "value"), State("wi-driver", "value"),
@@ -154,7 +220,7 @@ def register(app, store: Store) -> None:
         sub = "Diferencia acumulada frente a la estrategia real (s) · por debajo de 0, la alternativa va por delante"
         if None in (rnd, driver, c1, c2, s1):
             msg = "Elige un Gran Premio y un piloto para simular"
-            return [], F.empty(msg), F.empty(msg), "", "Diseña una estrategia alternativa", sub
+            return [], F.empty(msg), F.empty(msg), "", "Diseña una estrategia alternativa", sub, F.empty(msg), "", ""
         model = store.model(rnd)
         total = int(store.race_row(rnd)["TotalLaps"])
         pls = store.pit_losses(rnd)
@@ -167,19 +233,19 @@ def register(app, store: Store) -> None:
         if stops == 2:
             if s2 is None or s2 <= s1:
                 msg = "Mueve la 2.ª parada a una vuelta posterior a la 1.ª"
-                return [], F.empty(msg), F.empty(msg), _warning([msg]), "Revisa las vueltas de parada", sub
+                return [], F.empty(msg), F.empty(msg), _warning([msg]), "Revisa las vueltas de parada", sub, F.empty(msg), "", ""
             alt = [(c1, s1), (c2, s2 - s1), (c3, laps_done - s2)]
         else:
             alt = [(c1, s1), (c2, laps_done - s1)]
         if alt[-1][1] < 1:
             msg = "La última parada no puede ser después de la última vuelta del piloto"
-            return [], F.empty(msg), F.empty(msg), _warning([msg]), "Revisa las vueltas de parada", sub
+            return [], F.empty(msg), F.empty(msg), _warning([msg]), "Revisa las vueltas de parada", sub, F.empty(msg), "", ""
 
         missing = [c for c, _ in alt if c not in model.compound_deg]
         if missing:
             msg = (f"Nadie usó {', '.join(COMPOUND_ES[c].lower() for c in missing)} en esta carrera: "
                    "elige otro compuesto")
-            return [], F.empty(msg), F.empty(msg), _warning([msg]), "Compuesto sin datos en esta carrera", sub
+            return [], F.empty(msg), F.empty(msg), _warning([msg]), "Compuesto sin datos en esta carrera", sub, F.empty(msg), "", ""
 
         warnings = []
         if not is_feasible(model, alt, first_age):
@@ -230,9 +296,10 @@ def register(app, store: Store) -> None:
         stops_real = list(np.cumsum([n for _, n in actual])[:-1])
         real_laps = store.laps[(store.laps["Round"] == rnd) & (store.laps["Driver"] == driver)]
         idx = np.arange(1, laps_done + 1)
+        win_fig, win_title, win_sub = _window(model, laps_done, first_age, pls, alt, actual)
         return (kpis, F.whatif_gap(gap, stops_alt, stops_real),
                 F.whatif_laps(real_laps, sim_alt, sim_real, np.isin(idx, stops_alt), np.isin(idx, stops_real)),
-                _warning(warnings), title, sub)
+                _warning(warnings), title, sub, win_fig, win_title, win_sub)
 
     # ------------------------------------------------------------------ Temporada
     @app.callback(
@@ -256,7 +323,8 @@ def register(app, store: Store) -> None:
             teams_title = f"{focus} fue {rank}.º de {len(teams)} en acierto estratégico ({fmt_s(teams[focus])} de media)"
         else:
             teams_title = f"{teams.index[0]} fue el equipo que mejor acertó con la estrategia ({fmt_s(teams.iloc[0])} de media)"
-        teams_sub = "Strategy Delta medio por piloto y carrera (s) · menos es mejor"
+        teams_sub = ("Cada punto es un piloto en una carrera · rombo: media con intervalo de confianza del 95 % "
+                     "(bootstrap) · menos es mejor")
 
         pos = a.groupby("Driver").agg(P=("PositionsLost", "sum"), Name=("FullName", "first"), Team=("Team", "first"))
         top = pos.sort_values("P").iloc[-1]
