@@ -14,7 +14,13 @@ import pandas as pd
 from strategy_audit.config import PROCESSED_DIR, RAW_DIR
 from strategy_audit.models.pace_model import fit_race, models_to_frames
 from strategy_audit.models.pit_loss import estimate_pit_loss
-from strategy_audit.processing.clean import actual_stints, dry_rounds, neutralised_laps, prepare_laps
+from strategy_audit.processing.clean import (
+    actual_stints,
+    dry_rounds,
+    neutralised_laps,
+    prepare_laps,
+    rounds_with_tyre_data,
+)
 from strategy_audit.simulation.audit import audit_race, validate_simulator
 
 log = logging.getLogger(__name__)
@@ -28,11 +34,15 @@ def run(season: int, raw_dir: Path = RAW_DIR, out_dir: Path = PROCESSED_DIR) -> 
     results = pd.read_parquet(raw_dir / f"results_{season}.parquet")
     races = pd.read_parquet(raw_dir / f"races_{season}.parquet")
 
+    tyre_ok = set(rounds_with_tyre_data(laps_raw))
     laps = prepare_laps(laps_raw, races)
     stints = actual_stints(laps)
     neutral = neutralised_laps(laps)
-    dry = dry_rounds(laps)
-    log.info("%d carreras, %d en seco", len(races), len(dry))
+    all_dry = dry_rounds(laps)
+    for rnd in sorted(set(all_dry) - tyre_ok):
+        log.warning("R%02d descartada: faltan datos de neumáticos en FastF1", rnd)
+    dry = [r for r in all_dry if r in tyre_ok]
+    log.info("%d carreras, %d en seco y con datos completos", len(races), len(dry))
 
     models, audits, bests, validations, race_rows = [], [], [], [], []
     laps["Predicted"] = float("nan")
@@ -63,7 +73,8 @@ def run(season: int, raw_dir: Path = RAW_DIR, out_dir: Path = PROCESSED_DIR) -> 
         log.info("R%02d MAE_cv=%.3fs pit=%.1fs auditados=%d", rnd, model.mae_cv, pit_loss, len(audit))
 
     drivers_df, compounds_df, summary_df = models_to_frames(models)
-    race_info = races.assign(IsDry=races["Round"].isin(dry)).merge(pd.DataFrame(race_rows), on="Round", how="left")
+    race_info = races.assign(IsDry=races["Round"].isin(all_dry), TyreDataOK=races["Round"].isin(tyre_ok))
+    race_info = race_info.merge(pd.DataFrame(race_rows), on="Round", how="left")
     race_info = race_info.merge(summary_df, on="Round", how="left")
 
     out_dir.mkdir(parents=True, exist_ok=True)

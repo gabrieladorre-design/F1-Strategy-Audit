@@ -3,7 +3,13 @@ import pandas as pd
 import pytest
 
 from strategy_audit.models.pace_model import fit_race, model_from_frames, models_to_frames
-from strategy_audit.processing.clean import actual_stints, dry_rounds, is_neutralised, prepare_laps
+from strategy_audit.processing.clean import (
+    actual_stints,
+    dry_rounds,
+    is_neutralised,
+    prepare_laps,
+    rounds_with_tyre_data,
+)
 from strategy_audit.simulation.simulator import (
     enumerate_strategies,
     is_feasible,
@@ -41,6 +47,14 @@ def test_dry_rounds():
     wet["Round"] = 2
     wet["Compound"] = "INTERMEDIATE"
     assert dry_rounds(pd.concat([laps, wet])) == [1]
+
+
+def test_rounds_with_missing_tyre_data_are_dropped():
+    laps, _, _ = make_race(1)
+    broken = laps.copy()
+    broken["Round"] = 2
+    broken.loc[broken["LapNumber"] <= 20, "Compound"] = None   # como Miami 2025
+    assert rounds_with_tyre_data(pd.concat([laps, broken])) == [1]
 
 
 def test_pace_model_recovers_parameters(race1):

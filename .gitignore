@@ -8,3 +8,7 @@ venv/
 .ipynb_checkpoints/
 # Caché de FastF1 (pesada, se regenera)
 data/cache/
+
+# Copias duplicadas que crea iCloud («archivo 2.py», «datos 2.parquet»…)
+* 2.*
+* 3.*

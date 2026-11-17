@@ -182,7 +182,8 @@ def method_tab(store: Store) -> html.Div:
         card("Cómo se audita cada estrategia", [dcc.Markdown(f"""
 **1 · Datos.** Tiempos por vuelta, neumáticos, paradas y estado de pista de cada carrera de {store.season}
 con [FastF1](https://docs.fastf1.dev/). Se excluyen la vuelta 1, las vueltas de entrada y salida de boxes,
-las vueltas con SC/VSC y los valores atípicos. Las carreras con lluvia quedan fuera.
+las vueltas con SC/VSC y los valores atípicos. Las carreras con lluvia o con datos de neumáticos
+incompletos quedan fuera.
 
 **2 · Modelo de ritmo.** Para cada carrera, una regresión lineal por mínimos cuadrados:
 
@@ -211,7 +212,8 @@ La posición estimada compara el tiempo real menos el delta con los tiempos real
 - No se modelan el calentamiento del neumático ni la salida: el modelo tiende a preferir empezar con duro.
 - En circuitos sin adelantamientos (Mónaco, Singapur) el ritmo está limitado por el tráfico y el error es mayor.
 - Reglas especiales de 2025 incluidas: dos paradas obligatorias en Mónaco y máximo de 25 vueltas por juego en Qatar.
-- Los pilotos sin datos de compuesto en parte de la carrera (p. ej. en Miami) no se auditan.
+- El GP de Miami queda fuera: FastF1 no trae los neumáticos de las primeras 24 vueltas de casi toda
+  la parrilla y los stints posteriores llegan desalineados, así que la auditoría no sería fiable.
 """)], "Limitaciones conocidas del modelo"),
     ])
 

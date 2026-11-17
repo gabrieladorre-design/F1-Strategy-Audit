@@ -2,165 +2,107 @@
 
 [![Tests](https://github.com/gabrieladorre-design/F1-Strategy-Audit/actions/workflows/tests.yml/badge.svg)](https://github.com/gabrieladorre-design/F1-Strategy-Audit/actions/workflows/tests.yml)
 
-Proyecto de la asignatura *Desarrollo de Aplicaciones para la Visualización de Datos* (curso 2026-2027), ICAI-ICADE, Universidad Pontificia Comillas.
+**App:** https://f1-strategy-audit.onrender.com/ (si tarda ~50 s en abrir es que Render la había dormido)
 
-Gabriela De Dorremochea
-
-**Aplicación desplegada:** https://f1-strategy-audit.onrender.com/
+Proyecto de *Desarrollo de Aplicaciones para la Visualización de Datos* (2026-2027), ICAI-ICADE · Gabriela de Dorremochea
 
 ---
 
-## Descripción
+## La idea
 
-En Fórmula 1 la estrategia decide carreras: cuándo parar y con qué neumático. Fuera de los equipos, esas decisiones se juzgan con intuición y opinión, no con datos.
+Después de cada Gran Premio siempre surge la misma discusión: «Ferrari volvió a equivocarse con la estrategia». Pero casi nunca se mide de verdad cuánto costó esa decisión.
 
-**F1 Strategy Audit** es una aplicación interactiva que, después de cada Gran Premio:
+Este proyecto intenta medirlo. Para cada piloto de cada carrera de 2025 se pregunta: **¿cuántos segundos perdió por cómo gestionó paradas y neumáticos, comparado con lo mejor que podría haber hecho?** A ese número lo llamo **Strategy Delta**.
 
-1. **Modela el ritmo** de cada piloto (degradación del neumático y efecto del combustible) a partir de los tiempos por vuelta.
-2. **Simula estrategias alternativas** (otra vuelta de parada, otros compuestos, una o dos paradas) y calcula el tiempo total de carrera resultante.
-3. **Cuantifica la calidad de cada decisión** con la métrica *Strategy Delta*: segundos ganados o perdidos frente a la mejor estrategia simulada.
-4. **Lo visualiza** en un dashboard con análisis de carrera, simulador "¿y si…?" y balance de temporada.
+## Cómo funciona
 
-Usuarios objetivo: aficionados avanzados, periodistas y creadores de contenido, y estudiantes o aspirantes a ingenieros de estrategia.
-
-## Objetivos
-
-**Minimum Viable Product**
-
-- **O1 · Datos:** pipeline reproducible que integre FastF1 y Jolpica-F1 en PostgreSQL (temporadas 2025 y 2026, carreras en seco).
-- **O2 · Modelo de ritmo:** regresión por compuesto y circuito que estime la degradación y el efecto del combustible, validada con MAE sobre carreras no usadas en el ajuste.
-- **O3 · Simulador:** cálculo del tiempo total de carrera de un piloto para estrategias de una y dos paradas, validado frente a los tiempos reales.
-- **O4 · Auditoría:** métrica *Strategy Delta* por piloto, carrera, equipo y temporada.
-- **O5 · Visualización:** dashboard en Dash/Plotly con tres vistas (carrera, "¿y si…?", temporada).
-
-**Ampliaciones opcionales (después de terminar el MVP)**
-
-- API REST con FastAPI · asistente de IA que explique los resultados · reacción ante Safety Car / VSC · modelo LightGBM · simulación Monte Carlo con incertidumbre.
-
-## Arquitectura
+Todo el cálculo pesado se hace una vez, en local. La app solo lee los resultados ya calculados, por eso arranca rápido y se puede alojar gratis.
 
 ```
-FastF1 (tiempos por vuelta, neumáticos, boxes, estado de pista)
-        │   scripts/download_data.py   (necesita Internet, carga incremental)
-        ▼
-data/raw/*.parquet
-        │   scripts/build_dataset.py   (sin conexión)
-        ▼
-Limpieza ─► Modelo de ritmo ─► Pérdida en boxes ─► Simulador ─► Strategy Delta
-        │
-        ▼
-data/processed/*.parquet  ──►  Dashboard Dash + Plotly  ──►  Render (URL pública)
+FastF1 ─► limpieza ─► modelo de ritmo ─► pérdida en boxes ─► simulador ─► Strategy Delta ─► dashboard
+          (scripts/download_data.py)     (scripts/build_dataset.py, sin Internet)            (app.py)
 ```
 
-**Decisión de diseño (noviembre 2026):** la propuesta preveía PostgreSQL. Como todo el cálculo
-pesado se hace *offline* y la aplicación solo lee resultados, se sustituye por ficheros Parquet
-versionados en el repositorio. Ventajas: despliegue gratuito y sin servicios externos en Render,
-arranque rápido y resultados reproducibles. PostgreSQL queda como ampliación.
+**1. Datos.** Con [FastF1](https://docs.fastf1.dev/) descargo, vuelta a vuelta, el tiempo, el neumático, su edad, las paradas y si había Safety Car. Para estimar el ritmo me quedo solo con vueltas «limpias»: fuera la salida, las vueltas de entrada y salida de boxes, las de SC/VSC y las anormalmente lentas. Las carreras con lluvia o con datos de neumáticos incompletos se descartan enteras.
 
-**Limitación asumida:** el simulador no modela la interacción entre coches (tráfico, adelantamientos); la posición resultante se aproxima comparando tiempos con los rivales.
+**2. Modelo de ritmo.** Para cada carrera ajusto una regresión lineal:
 
-## Datos
+> tiempo de vuelta = ritmo del piloto + efecto del compuesto + degradación × edad del neumático + combustible × nº de vuelta
 
-| Fuente | Uso | Cobertura |
-|---|---|---|
-| [FastF1](https://docs.fastf1.dev/) | Tiempos por vuelta, neumáticos, stints, boxes, estado de pista, temperatura | 2018 – actualidad |
-| [Jolpica-F1 API](https://github.com/jolpica/jolpica-f1) | Resultados, parrilla, paradas, calendario | 1950 – actualidad |
+Así sé, en cada circuito, cuánto más rápido es un compuesto que otro y cuánto pierde por cada vuelta de uso. Lo valido dejando fuera stints enteros y prediciéndolos: se equivoca de media **0,53 s por vuelta**.
 
-## Stack tecnológico
+**3. Pérdida en boxes.** Miro cuánto más lentas son las vueltas de entrada y salida de cada parada respecto a lo que predice el modelo, y me quedo con la mediana (unos 18–28 s según el circuito). Si paras con SC o VSC, cuento la mitad.
 
-Python 3.12 · pandas · NumPy · FastF1 · Parquet (pyarrow) · Dash / Plotly · pytest · gunicorn · Render
+**4. Simulador.** Con el modelo y la pérdida en boxes puedo calcular el tiempo total de cualquier estrategia. Pruebo todas las de 1 y 2 paradas que cumplen el reglamento (dos compuestos distintos, y en 2025 dos paradas obligatorias en Mónaco y máximo 25 vueltas por juego en Qatar) sin pasarme de la longitud de stint que se vio en carrera. Está vectorizado con NumPy, así que son miles de combinaciones por piloto en milisegundos. Con la estrategia real, el simulador se queda a **2,2 s** del tiempo real de carrera (≈ 0,04 %).
 
-## Estructura del repositorio
+**5. Strategy Delta.** Simulo la estrategia que hizo el piloto y la mejor posible, y resto. Como las dos salen del mismo modelo, sus errores se compensan casi del todo y lo que queda es el efecto de la decisión. Además estimo en qué posición habría acabado comparando su tiempo corregido con los tiempos reales de los rivales.
 
-```
-F1-Strategy-Audit/
-├── app.py                     # Punto de entrada (local y gunicorn en Render)
-├── requirements.txt           # Dependencias de la app (Render)
-├── requirements-pipeline.txt  # + FastF1, scikit-learn, pytest (local)
-├── Procfile · render.yaml     # Despliegue en Render
-├── assets/style.css           # Estilos del dashboard
-├── data/
-│   ├── raw/                   # Datos descargados con FastF1 (Parquet)
-│   └── processed/             # Tablas que consume la app (Parquet)
-├── docs/                      # Propuesta
-├── scripts/
-│   ├── download_data.py       # Paso 1: descarga
-│   └── build_dataset.py       # Paso 2: modelo, simulación y auditoría
-├── src/strategy_audit/
-│   ├── ingestion/             # Descarga con FastF1
-│   ├── processing/            # Limpieza, stints, vueltas con SC/VSC
-│   ├── models/                # Modelo de ritmo y pérdida en boxes
-│   ├── simulation/            # Simulador de estrategias y Strategy Delta
-│   ├── dashboard/             # Datos, tema visual (theme.py), figuras, layout y callbacks de Dash
-│   └── pipeline.py            # Orquestación del paso 2
-└── tests/                     # pytest con carreras sintéticas de parámetros conocidos
-```
+## Qué vas a ver en la app
 
-## Cómo ejecutarlo
+| Pestaña | Para qué sirve |
+|---|---|
+| **Análisis de carrera** | Eliges un GP y ves los stints reales frente a los óptimos, la evolución de la carrera, quién perdió más tiempo y cuánto se degradó cada compuesto |
+| **¿Y si…?** | Cambias neumáticos y vueltas de parada de un piloto y ves al momento cuánto habría ganado o perdido y en qué posición habría acabado. También muestra la ventana de parada: entre qué vueltas parar costaba menos de 1 s |
+| **Temporada** | Ranking de equipos por acierto estratégico (con intervalo de confianza), posiciones perdidas por piloto y la carrera más difícil de acertar |
+| **Metodología** | Cómo de bien funciona el modelo, carrera a carrera, y lo que no tiene en cuenta |
+
+Los títulos de cada gráfico no describen el gráfico, cuentan la conclusión (p. ej. «Norris perdió 11,6 s con B → M → B → B frente a M → B → B» en España), y cambian según lo que elijas.
+
+## Resultados 2025
+
+- **20 de 24 carreras** auditadas y **348** auditorías piloto-carrera.
+- Fuera quedan Australia, Gran Bretaña y Bélgica (lluvia) y Miami (FastF1 no trae los neumáticos de las primeras 24 vueltas y el resto llega desalineado).
+- Error del modelo: 0,53 s por vuelta en stints que no vio al ajustarse.
+- Error del simulador: 2,2 s en el tiempo total (carreras sin Safety Car).
+
+## Lo que el modelo no sabe
+
+Prefiero decirlo claro antes de que salga en las preguntas:
+
+- **No hay tráfico.** Parar antes puede ser más rápido en el simulador y dejarte detrás de otro coche en la vida real.
+- **Es a posteriori.** La mejor estrategia «sabe» cuándo salió el Safety Car; el muro no lo sabía.
+- **Neumático nuevo en cada parada.** No sé qué juegos le quedaban a cada piloto.
+- **Degradación lineal**, sin calentamiento del neumático ni salida. Por eso el modelo tiende a preferir empezar con duro.
+- En Mónaco o Singapur el ritmo lo marca el tráfico y el error es mayor.
+
+## Ejecutarlo en local
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-pipeline.txt
 
-python scripts/download_data.py --season 2025   # descarga (≈15 min la primera vez)
-python scripts/build_dataset.py --season 2025   # modelo + auditoría
-python app.py                                   # http://127.0.0.1:8050
+python app.py                                   # la app, con los datos que ya hay en el repo → http://127.0.0.1:8050
 pytest                                          # tests
+
+# Solo si quieres regenerar los datos:
+python scripts/download_data.py --season 2025   # descarga de FastF1 (~15 min la primera vez)
+python scripts/build_dataset.py --season 2025   # modelo, simulación y auditoría (segundos)
 ```
 
-## Resultados (temporada 2025)
+## Cómo está organizado
 
-| Métrica | Valor |
-|---|---|
-| Carreras auditadas (en seco) | 21 de 24 |
-| Auditorías piloto-carrera | 351 |
-| Error del modelo de ritmo (MAE, stints no vistos) | 0,52 s por vuelta |
-| Error del simulador con la estrategia real (carreras sin SC) | 2,2 s en el tiempo total (≈ 0,04 %) |
+```
+app.py                       punto de entrada (local y Render)
+scripts/                     download_data.py (descarga) y build_dataset.py (cálculo)
+src/strategy_audit/
+  ingestion/                 descarga con FastF1
+  processing/                limpieza de vueltas, stints y vueltas con SC/VSC
+  models/                    modelo de ritmo y pérdida en boxes
+  simulation/                simulador de estrategias y Strategy Delta
+  dashboard/                 datos, estilo (theme.py), figuras, layout y callbacks de Dash
+  pipeline.py                une todos los pasos del cálculo
+data/raw/ · data/processed/  Parquet: datos descargados y tablas que lee la app
+tests/                       pytest con carreras sintéticas de parámetros conocidos
+```
 
-## Despliegue y CI/CD
+**Stack:** Python 3.12 · pandas · NumPy · FastF1 · Parquet · Dash + Plotly · pytest · gunicorn · Render · GitHub Actions
 
-- **Render** (plan gratuito): cada `git push` a `main` vuelve a desplegar la app
-  (`gunicorn --timeout 600 app:server`). El pie de página muestra el commit desplegado.
-- **GitHub Actions** (`.github/workflows/tests.yml`): en cada push se ejecutan los tests y se
-  comprueba que la app arranca con los datos del repositorio.
-- Tras un despliegue, recarga la página (Cmd + Shift + R): una pestaña abierta con la versión
-  anterior pide callbacks que ya no existen en el servidor.
-- El plan gratuito se duerme tras un rato sin visitas; la primera carga tarda ~50 s.
+## Despliegue
 
-## Método
+- Cada `git push` a `main` lanza los tests en GitHub Actions y vuelve a desplegar la app en Render.
+- El pie de la app muestra el commit que está en línea, para comprobar que el despliegue ha terminado.
+- Si después de un despliegue algo da error, recarga con Cmd + Shift + R: la pestaña abierta seguía con la versión anterior.
 
-| Paso | Qué hace |
-|---|---|
-| Limpieza | Excluye vuelta 1, vueltas de entrada/salida de boxes, SC/VSC/roja, atípicas (> 5 % sobre la mediana del piloto) y carreras con lluvia |
-| Modelo de ritmo | Por carrera: `tiempo = ritmo piloto + offset compuesto + degradación compuesto × edad neumático + combustible × vuelta` (mínimos cuadrados). Validación cruzada dejando fuera stints completos |
-| Pérdida en boxes | Mediana del tiempo extra de vueltas de entrada + salida frente al modelo, con bandera verde. Con SC/VSC cuenta la mitad |
-| Reglas 2025 | Dos paradas obligatorias en Mónaco y máximo de 25 vueltas por juego en Qatar |
-| Simulador | Todas las estrategias de 1 y 2 paradas que usan ≥ 2 compuestos y no superan el stint más largo observado; vectorizado con NumPy |
-| Strategy Delta | Tiempo simulado con la estrategia real − tiempo simulado con la mejor. Posición estimada frente a los tiempos reales de los rivales |
+## Por qué no hay base de datos
 
-## Plan de trabajo inicial
-
-Planificación para un cuatrimestre (10 semanas desde la propuesta).
-
-| Fase | Semanas | Tareas | Entregable |
-|---|---|---|---|
-| **0. Propuesta** | 1 | Definición del proyecto, repositorio y README | Propuesta (5 oct 2026) |
-| **1. Datos** | 2 | Descarga con FastF1 y Jolpica, limpieza de vueltas, esquema y carga en PostgreSQL, EDA de degradación | Base de datos 2025–2026 y notebook de EDA |
-| **2. Modelo de ritmo** | 2-4 | Regresión por compuesto y circuito, pérdida en pit lane, validación (MAE) | Modelo validado |
-| **3. Simulador y auditoría** | 5-6 | Simulador de 1 y 2 paradas, validación frente a tiempos reales, cálculo del Strategy Delta | Auditoría de todas las carreras |
-| **4. Dashboard** | 7-8 | Vistas de carrera, «¿y si…?» y temporada en Dash | Aplicación funcional (MVP) |
-| **5. Cierre** | 9-10 | Pruebas, documentación, memoria y presentación; ampliaciones si hay margen | Entrega final |
-
-### Hitos
-
-- [x] Propuesta y repositorio
-- [x] Pipeline de datos y modelo implementados (2025)
-- [x] Datos reales 2025 descargados (24 carreras, 26 689 vueltas) y modelo validado
-- [x] Simulador y Strategy Delta (con tests)
-- [x] Dashboard MVP (carrera, ¿y si…?, temporada, metodología)
-- [x] Aplicación desplegada en una URL pública (Render)
-- [ ] Presentación (26/30 nov 2026)
-- [ ] Ampliaciones: temporada 2026, PostgreSQL, API, asistente IA
-
-
-
+La propuesta inicial usaba PostgreSQL. Al ver que la app solo lee resultados ya calculados, lo cambié por ficheros Parquet dentro del repo: despliegue gratis, sin servicios externos y resultados reproducibles por cualquiera que clone el proyecto. Si el proyecto crece (temporada 2026, API), es lo primero que volvería a poner.

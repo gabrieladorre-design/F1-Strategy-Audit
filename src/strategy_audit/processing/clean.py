@@ -8,6 +8,8 @@ modelo. Se excluyen:
 * vueltas con Safety Car, VSC o bandera roja,
 * vueltas sin tiempo, borradas o con compuesto de lluvia,
 * valores atípicos (más de un 5 % por encima de la mediana del piloto).
+
+Además se descartan carreras enteras con lluvia o con datos de neumáticos incompletos.
 """
 from __future__ import annotations
 
@@ -19,6 +21,7 @@ from strategy_audit.config import DRY_COMPOUNDS, WET_COMPOUNDS
 NEUTRALISED_CODES = set("4567")
 OUTLIER_FACTOR = 1.05
 WET_SHARE_LIMIT = 0.05
+MISSING_TYRE_LIMIT = 0.05   # máximo de vueltas sin compuesto conocido para auditar una carrera
 
 
 def is_neutralised(track_status) -> bool:
@@ -32,6 +35,18 @@ def dry_rounds(laps: pd.DataFrame) -> list[int]:
     """Carreras en seco: menos de un 5 % de vueltas con intermedios o lluvia."""
     share = laps.assign(wet=laps["Compound"].isin(WET_COMPOUNDS)).groupby("Round")["wet"].mean()
     return sorted(share[share < WET_SHARE_LIMIT].index.astype(int))
+
+
+def rounds_with_tyre_data(laps: pd.DataFrame, limit: float = MISSING_TYRE_LIMIT) -> list[int]:
+    """Carreras en las que FastF1 trae el compuesto de casi todas las vueltas.
+
+    En Miami 2025 faltan los neumáticos de las primeras ~24 vueltas de casi toda la
+    parrilla y los stints posteriores llegan desalineados: con esos datos el modelo
+    y la auditoría no son fiables, así que la carrera se descarta entera.
+    """
+    known = laps["Compound"].isin(DRY_COMPOUNDS + WET_COMPOUNDS)
+    missing = (~known).groupby(laps["Round"]).mean()
+    return sorted(missing[missing <= limit].index.astype(int))
 
 
 def prepare_laps(laps: pd.DataFrame, races: pd.DataFrame) -> pd.DataFrame:
