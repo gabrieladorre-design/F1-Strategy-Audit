@@ -117,3 +117,12 @@ footer { margin-top: 30px; color: var(--muted); font-size: 13px; text-align: cen
   .grid-2, .whatif { grid-template-columns: 1fr; }
   .panel { position: static; }
 }
+
+/* Enlace a la vista actual y descarga */
+.share {
+  display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+  color: var(--muted); font-size: 13px; margin: -8px 0 4px;
+}
+.share-icon { cursor: pointer; color: var(--muted); font-size: 15px; }
+.share-icon:hover, .share:hover .share-label { color: var(--accent); }
+.controls > .controls-action { display: flex; align-items: flex-end; min-width: 0; }

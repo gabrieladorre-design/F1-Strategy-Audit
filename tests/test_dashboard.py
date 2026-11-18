@@ -100,3 +100,25 @@ def test_app_builds(store):
     app = create_app(2025)
     assert app.layout is not None
     assert len(app.callback_map) >= 5
+
+
+def test_share_links_roundtrip(store):
+    from strategy_audit.dashboard.links import build_query, parse_query
+
+    rnd = store.audited_rounds[0]
+    driver = store.audit[store.audit["Round"] == rnd]["Driver"].iloc[0]
+    query = build_query(store, "race", rnd, driver)
+    assert parse_query(query, store) == {"tab": "race", "round": rnd, "driver": driver}
+    # Se acepta también el número de ronda, y se ignora lo que no existe en los datos
+    assert parse_query(f"?vista=ysi&gp={rnd}&piloto=XXX", store) == {"tab": "whatif", "round": rnd}
+    assert parse_query("?vista=temporada&equipo=ferrari", store)["team"] == "Ferrari"
+    assert parse_query("?gp=ZZZ&vista=nada", store) == {}
+    assert parse_query(None, store) == {}
+
+
+def test_race_csv(store):
+    from strategy_audit.dashboard.callbacks import race_csv
+
+    df = race_csv(store, store.audited_rounds[0])
+    assert len(df) == (store.audit["Round"] == store.audited_rounds[0]).sum()
+    assert {"Gran Premio", "Piloto", "Strategy Delta (s)", "Estrategia real"} <= set(df.columns)

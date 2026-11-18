@@ -69,6 +69,11 @@ def race_tab(store: Store) -> html.Div:
                                    value=rounds[-1] if rounds else None, clearable=False, className="dd")]),
             html.Div([html.Label("Destacar piloto"),
                       dcc.Dropdown(id="race-focus", placeholder="Ninguno: mejor y peor", className="dd")]),
+            html.Div(className="controls-action", children=[
+                html.Button("Descargar CSV", id="race-csv", className="btn",
+                            title="Auditoría de esta carrera: estrategia real, óptima y Strategy Delta por piloto"),
+                dcc.Download(id="race-download"),
+            ]),
         ]),
         html.Div(id="race-kpis", className="kpis kpis-small"),
         card("", [graph("race-stints")], id_="race-stints-card"),
@@ -226,7 +231,13 @@ def build_layout(store: Store | None) -> html.Div:
                    "scripts/build_dataset.py y vuelve a arrancar la aplicación."),
         ])])
     return html.Div(className="app", children=[
+        dcc.Location(id="url", refresh=False),
+        dcc.Store(id="url-params"),
         header(store),
+        html.Div(className="share", children=[
+            dcc.Clipboard(id="share-copy", title="Copiar enlace a esta vista", className="share-icon"),
+            html.Span("Copiar enlace a esta vista", className="share-label"),
+        ]),
         dcc.Tabs(id="tabs", value="race", className="tabs", children=[
             dcc.Tab(label="Análisis de carrera", value="race", children=race_tab(store),
                     className="tab", selected_className="tab--selected"),

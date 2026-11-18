@@ -46,6 +46,8 @@ Así sé, en cada circuito, cuánto más rápido es un compuesto que otro y cuá
 | **Temporada** | Ranking de equipos por acierto estratégico (con intervalo de confianza), posiciones perdidas por piloto y la carrera más difícil de acertar |
 | **Metodología** | Cómo de bien funciona el modelo, carrera a carrera, y lo que no tiene en cuenta |
 
+**Enlaces directos.** El botón «Copiar enlace a esta vista» guarda la carrera, el piloto o el equipo que tengas elegidos. Por ejemplo, [`?vista=carrera&gp=MON&piloto=VER`](https://f1-strategy-audit.onrender.com/?vista=carrera&gp=MON&piloto=VER) abre Mónaco con Verstappen destacado, y [`?vista=temporada&equipo=Ferrari`](https://f1-strategy-audit.onrender.com/?vista=temporada&equipo=Ferrari) abre la temporada de Ferrari. En la pestaña de carrera, «Descargar CSV» baja la auditoría de ese GP, lista para abrir en Excel.
+
 Los títulos de cada gráfico no describen el gráfico, cuentan la conclusión (p. ej. «Norris perdió 11,6 s con B → M → B → B frente a M → B → B» en España), y cambian según lo que elijas.
 
 ## Resultados 2025
