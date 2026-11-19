@@ -14,6 +14,11 @@ Después de cada Gran Premio siempre surge la misma discusión: «Ferrari volvi�
 
 Este proyecto intenta medirlo. Para cada piloto de cada carrera de 2025 se pregunta: **¿cuántos segundos perdió por cómo gestionó paradas y neumáticos, comparado con lo mejor que podría haber hecho?** A ese número lo llamo **Strategy Delta**.
 
+**Para empezar, tres vistas que merecen la pena:**
+- [Mónaco con Verstappen](https://f1-strategy-audit.onrender.com/?vista=carrera&gp=MON&piloto=VER): con las dos paradas obligatorias, su estrategia le costó 22 s frente a la mejor posible.
+- [¿Y si…? en Singapur con Norris](https://f1-strategy-audit.onrender.com/?vista=ysi&gp=SGP&piloto=NOR): mueve la parada y mira cómo cambia su resultado.
+- [La temporada de Ferrari](https://f1-strategy-audit.onrender.com/?vista=temporada&equipo=Ferrari): cómo de bien acertó con la estrategia frente al resto de equipos.
+
 ## Cómo funciona
 
 Todo el cálculo pesado se hace una vez, en local. La app solo lee los resultados ya calculados, por eso arranca rápido y se puede alojar gratis.
