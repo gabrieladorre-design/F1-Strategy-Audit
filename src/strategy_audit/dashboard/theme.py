@@ -95,7 +95,17 @@ pio.templates["strategy_audit"] = go.layout.Template(layout=dict(
     bargap=0.3,
 ))
 
-GRAPH_CONFIG = {"displayModeBar": False, "responsive": True}
+# Al pasar el ratón por un gráfico aparece solo el botón de descargarlo en PNG (doble resolución)
+GRAPH_CONFIG = {
+    "responsive": True,
+    "displayModeBar": "hover",
+    "displaylogo": False,
+    "locale": "es",
+    "locales": {"es": {"dictionary": {"Download plot as a PNG": "Descargar el gráfico en PNG",
+                                      "Download plot": "Descargar el gráfico"}}},
+    "modeBarButtons": [["toImage"]],
+    "toImageButtonOptions": {"format": "png", "scale": 2, "filename": "f1-strategy-audit"},
+}
 
 
 # ---------------------------------------------------------------- Formato (español de España)
