@@ -126,3 +126,25 @@ footer { margin-top: 30px; color: var(--muted); font-size: 13px; text-align: cen
 .share-icon { cursor: pointer; color: var(--muted); font-size: 15px; }
 .share-icon:hover, .share:hover .share-label { color: var(--accent); }
 .controls > .controls-action { display: flex; align-items: flex-end; min-width: 0; }
+
+/* Móvil: pestañas en una fila deslizable y gráficos con ancho mínimo legible */
+@media (max-width: 700px) {
+  .app { padding: 16px 12px 28px; }
+  .brand h1 { font-size: 22px; }
+  .brand p { font-size: 13.5px; }
+  .kpis { gap: 10px; }
+  .kpi { padding: 12px 14px; }
+  .kpi-value { font-size: 22px; }
+  .kpi-label { font-size: 11px; }
+  .share { margin-top: 0; }
+  .tabs { overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { flex: 0 0 auto !important; white-space: nowrap; padding: 10px 12px !important; font-size: 14px; }
+  .card { padding: 14px 12px; }
+  .card h3 { font-size: 16px; }
+  .controls > div, .dd { min-width: 0; width: 100%; }
+  .grid-2 > *, .whatif > * { min-width: 0; }
+  .graph-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .graph-scroll > * { min-width: 620px; }
+  .card:has(.graph-scroll) .card-sub::after { content: " · desliza el gráfico →"; color: var(--accent); }
+}

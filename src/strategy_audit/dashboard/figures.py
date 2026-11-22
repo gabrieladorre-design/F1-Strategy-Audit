@@ -72,10 +72,8 @@ def stint_comparison(actual: pd.DataFrame, best: pd.DataFrame, order: list[str],
         for col in (1, 2):
             fig.add_vrect(x0=lap - 1, x1=lap, fillcolor=NEUTRAL_BAND, opacity=0.12, line_width=0,
                           row=1, col=col)
-    if neutral:
-        first = min(neutral)
-        fig.add_annotation(x=first - 0.5, y=1.0, yref="paper", text="SC/VSC", showarrow=False,
-                           font=dict(color=MUTED, size=11), yanchor="bottom", xref="x")
+    # Sin etiqueta «SC/VSC» sobre la franja: chocaba con el título del panel cuando el SC
+    # salía en las primeras vueltas. El subtítulo de la tarjeta ya explica las franjas.
 
     ticks = [f"<b>{d}</b>" if d == focus else d for d in order]
     fig.update_layout(barmode="overlay", bargap=0.35)
@@ -83,13 +81,14 @@ def stint_comparison(actual: pd.DataFrame, best: pd.DataFrame, order: list[str],
                      tickmode="array", tickvals=order, ticktext=ticks)
     fig.update_xaxes(range=[0, total_laps + 0.5], title_text="Vuelta")
     fig = _base(fig, height=max(380, 26 * len(order) + 110))
-    fig.update_layout(margin=dict(t=56))
+    fig.update_layout(margin=dict(t=84))
     for ann in fig.layout.annotations:
         if ann.text in ("Estrategia real", "Mejor estrategia simulada"):
             ann.font = dict(color=TEXT, size=13)
             ann.x = 0 if ann.text == "Estrategia real" else 0.52
             ann.xanchor = "left"
-    fig.update_layout(legend=dict(x=1, xanchor="right", y=1.08))
+    # Leyenda en su propia línea, por encima de los títulos de los paneles (no se solapan en móvil)
+    fig.update_layout(legend=dict(x=0, xanchor="left", y=0.995, yanchor="top", yref="container"))
     return fig
 
 

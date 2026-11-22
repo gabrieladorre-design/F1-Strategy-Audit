@@ -35,8 +35,10 @@ def card(title, children, subtitle: str | None = None, id_: str | None = None,
     return html.Div(className=f"card {class_name}", children=[html.Div(head, className="card-head"), *children])
 
 
-def graph(id_: str) -> dcc.Loading:
-    return dcc.Loading(dcc.Graph(id=id_, config=GRAPH_CONFIG), type="dot", color=ACCENT)
+def graph(id_: str) -> html.Div:
+    # En el móvil el contenedor se desplaza en horizontal: el gráfico conserva un ancho legible
+    return html.Div(dcc.Loading(dcc.Graph(id=id_, config=GRAPH_CONFIG), type="dot", color=ACCENT),
+                    className="graph-scroll")
 
 
 def header(store: Store) -> html.Div:
@@ -238,7 +240,7 @@ def build_layout(store: Store | None) -> html.Div:
             dcc.Clipboard(id="share-copy", title="Copiar enlace a esta vista", className="share-icon"),
             html.Span("Copiar enlace a esta vista", className="share-label"),
         ]),
-        dcc.Tabs(id="tabs", value="race", className="tabs", children=[
+        dcc.Tabs(id="tabs", value="race", className="tabs", mobile_breakpoint=0, children=[
             dcc.Tab(label="Análisis de carrera", value="race", children=race_tab(store),
                     className="tab", selected_className="tab--selected"),
             dcc.Tab(label="¿Y si…?", value="whatif", children=whatif_tab(store),
