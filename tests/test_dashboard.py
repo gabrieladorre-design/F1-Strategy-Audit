@@ -122,3 +122,15 @@ def test_race_csv(store):
     df = race_csv(store, store.audited_rounds[0])
     assert len(df) == (store.audit["Round"] == store.audited_rounds[0]).sum()
     assert {"Gran Premio", "Piloto", "Strategy Delta (s)", "Estrategia real"} <= set(df.columns)
+
+
+def test_page_metadata_and_downloads(store):
+    from strategy_audit.dashboard.app import create_app
+    from strategy_audit.dashboard.theme import GRAPH_CONFIG
+
+    html = create_app(2025).server.test_client().get("/").get_data(as_text=True)
+    assert '<html lang="es">' in html
+    assert 'property="og:image"' in html and "/assets/favicon.svg" in html
+    # Cada gráfico se puede descargar en PNG y el botón está en español
+    assert GRAPH_CONFIG["modeBarButtons"] == [["toImage"]]
+    assert "Download plot as a PNG" in GRAPH_CONFIG["locales"]["es"]["dictionary"]

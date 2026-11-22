@@ -37,7 +37,9 @@ def card(title, children, subtitle: str | None = None, id_: str | None = None,
 
 def graph(id_: str) -> html.Div:
     # En el móvil el contenedor se desplaza en horizontal: el gráfico conserva un ancho legible
-    return html.Div(dcc.Loading(dcc.Graph(id=id_, config=GRAPH_CONFIG), type="dot", color=ACCENT),
+    config = {**GRAPH_CONFIG, "toImageButtonOptions": {
+        **GRAPH_CONFIG["toImageButtonOptions"], "filename": f"f1-strategy-audit-{id_}"}}
+    return html.Div(dcc.Loading(dcc.Graph(id=id_, config=config), type="dot", color=ACCENT),
                     className="graph-scroll")
 
 
