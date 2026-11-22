@@ -2,7 +2,12 @@
   "season": 2025,
   "races": 24,
   "dry_races_modelled": 20,
-  "pace_model_mae_cv_s": 0.5252711723987005,
-  "simulator_mae_s": 2.244533537629332,
+  "pace_model_mae_cv_s": 0.5006694770669273,
+  "simulator_mae_s": 4.664658874349698,
+  "simulator_mae_clean_s": 7.315195696782168,
+  "simulator_median_abs_s": 1.7029418612864902,
+  "simulator_bias_s": 0.2167732364748179,
+  "simulator_bias_clean_s": -7.258506740133797,
+  "traffic_coef_s": 0.27606697215211995,
   "audited_driver_races": 348
 }

@@ -487,11 +487,31 @@ def _close_colors(c1: str, c2: str, tol: int = 60) -> bool:
 
 
 # --------------------------------------------------------------------------- Ventana de parada
-def pit_window_curves(model, laps_done: int, first_age: int, pit_losses: np.ndarray) -> dict:
+TRAFFIC_WINDOW = 25.0   # s: el tráfico se calcula donde la estrategia limpia está cerca del óptimo
+
+
+def _with_traffic(tot: np.ndarray, stints_of, penalty, ref: float, window: float = TRAFFIC_WINDOW) -> np.ndarray:
+    """Suma el tráfico a las celdas a menos de ``window`` s de ``ref``.
+
+    Las celdas más lejanas quedan fuera de la escala del gráfico (tope = mínimo + 15 s) aun sin
+    tráfico, porque el tráfico solo puede sumar tiempo.
+    """
+    if penalty is None:
+        return tot
+    out = tot.copy()
+    for idx in zip(*np.nonzero(np.isfinite(tot) & (tot <= ref + window))):
+        out[idx] = tot[idx] + penalty(stints_of(*idx)).loss
+    return out
+
+
+def pit_window_curves(model, laps_done: int, first_age: int, pit_losses: np.ndarray,
+                      penalty=None, best_total: float | None = None) -> dict:
     """Tiempo de la estrategia frente al óptimo para cada vuelta de parada (1 parada).
 
     Devuelve {(c1, c2): array} con NaN donde la estrategia no es factible, y la
-    referencia ``best`` = coste de la mejor estrategia de 1 o 2 paradas.
+    referencia ``best`` = coste de la mejor estrategia de 1 o 2 paradas. Con ``penalty``
+    (función stints → resultado de tráfico) cada punto incluye el tiempo perdido en tráfico
+    y ``best_total`` es el óptimo con tráfico de la auditoría.
     """
     N = laps_done
     comps = model.usable_compounds
@@ -504,9 +524,14 @@ def pit_window_curves(model, laps_done: int, first_age: int, pit_losses: np.ndar
                 continue
             tot = _stint_cost_array(model, c1, N, first_age)[s] + _stint_cost_array(model, c2, N, 1)[N - s] + pl[s]
             if np.isfinite(tot).any():
+                ref = float(np.min(tot[np.isfinite(tot)]))
+                # 1 parada: pocas vueltas posibles, se calcula el tráfico en todas
+                tot = _with_traffic(tot, lambda k, a=c1, b=c2: [(a, int(k)), (b, int(N - k))], penalty, ref, np.inf)
                 curves[(c1, c2)] = np.where(np.isfinite(tot), tot, np.nan)
     strategies = enumerate_strategies(model, N, first_age, pit_losses)
     best = strategies[0].cost if strategies else (np.nanmin([np.nanmin(c) for c in curves.values()]) if curves else 0.0)
+    if best_total is not None:
+        best = min(best_total, min((np.nanmin(c) for c in curves.values()), default=best_total))
     best2 = next((st for st in strategies if st.stops == 2), None)
     return {"curves": {k: v - best for k, v in curves.items()},
             "best2": (best2.cost - best) if best2 else None,
@@ -576,14 +601,18 @@ def pit_window(win: dict, pair: tuple[str, str] | None, stop_alt: int | None,
         ))
     n = max(len(v) for v in curves.values())
     fig.update_xaxes(title_text="Vuelta de la parada", range=[0, n + 1])
-    fig.update_yaxes(title_text="Tiempo perdido frente al óptimo (s)", range=[-2.5, 20], zeroline=False)
+    # Eje hasta 20 s, o más si la curva elegida queda por encima (con tráfico puede pasar)
+    top = 20.0
+    if sel in curves and np.isfinite(curves[sel]).any():
+        top = max(top, float(np.nanmin(curves[sel])) + 12)
+    fig.update_yaxes(title_text="Tiempo perdido frente al óptimo (s)", range=[-2.5, top], zeroline=False)
     fig.add_hline(y=0, line=dict(color=MUTED, width=1))
     return _base(fig, height=340)
 
 
 def pit_window_2stop(model, laps_done: int, first_age: int, pit_losses: np.ndarray,
                      comps: tuple[str, str, str], stops_alt: tuple[int, int] | None,
-                     best_cost: float | None = None) -> tuple[go.Figure, dict]:
+                     best_cost: float | None = None, penalty=None) -> tuple[go.Figure, dict]:
     """Mapa de calor del tiempo perdido para cada par de vueltas de parada (2 paradas)."""
     N = laps_done
     c1, c2, c3 = comps
@@ -597,9 +626,12 @@ def pit_window_2stop(model, laps_done: int, first_age: int, pit_losses: np.ndarr
     info = {"ok": bool(np.isfinite(tot).any())}
     if not info["ok"]:
         return empty("Esta combinación de compuestos no es factible con 2 paradas"), info
+    tot = _with_traffic(tot, lambda i, j: [(c1, int(i)), (c2, int(j - i)), (c3, int(N - j))], penalty,
+                        float(np.min(tot[np.isfinite(tot)])))
     if best_cost is None:
         st = enumerate_strategies(model, N, first_age, pit_losses)
         best_cost = st[0].cost if st else float(np.min(tot))
+    best_cost = min(best_cost, float(np.min(tot[np.isfinite(tot)])))
     z = np.where(np.isfinite(tot), tot - best_cost, np.nan)
     i, j = np.unravel_index(np.nanargmin(z), z.shape)
     info.update(best=(int(i), int(j)), loss=float(z[i, j]))
@@ -686,3 +718,46 @@ def residuals_by_compound(laps: pd.DataFrame) -> go.Figure:
     fig.update_xaxes(title_text="Residuo: real − modelo (s)", range=[-lim, lim])
     _hbar_axes(fig)
     return _base(fig, height=320)
+
+
+# --------------------------------------------------------------------------- Tráfico
+def overtake_threshold(races: pd.DataFrame, race_abbr: dict[int, str], race_names: dict[int, str]) -> go.Figure:
+    """Ventaja de ritmo necesaria para adelantar en cada carrera (calibrada con los datos)."""
+    r = races.dropna(subset=["OvertakeDelta"]).sort_values("OvertakeDelta")
+    y = [race_abbr.get(int(x), str(x)) for x in r["Round"]]
+    hardest = r["OvertakeDelta"].max()
+    colors = [ACCENT if v == hardest else with_alpha(PRIMARY, 0.45) for v in r["OvertakeDelta"]]
+    fig = go.Figure(go.Bar(
+        x=r["OvertakeDelta"], y=y, orientation="h", marker=dict(color=colors, cornerradius=3),
+        text=[T.fmt_s(v) for v in r["OvertakeDelta"]], textposition="outside", cliponaxis=False,
+        textfont=dict(color=T.TEXT_2),
+        customdata=np.stack([[race_names.get(int(x), "") for x in r["Round"]],
+                             (r["PassRate"].fillna(0) * 100).round(1), r["FollowSituations"].fillna(0)], axis=1),
+        hovertemplate=("<b>%{customdata[0]}</b><br>Umbral: %{x:.2f} s por vuelta"
+                       "<br>%{customdata[1]} % de las situaciones a menos de 1 s acabaron en adelantamiento"
+                       "<br>%{customdata[2]} situaciones<extra></extra>"),
+    ))
+    fig.update_xaxes(title_text="Ventaja necesaria (s por vuelta)", range=[0, hardest * 1.18])
+    _hbar_axes(fig)
+    return _base(fig, height=max(380, 22 * len(r) + 80))
+
+
+def traffic_validation(validation: pd.DataFrame, race_abbr: dict[int, str]) -> go.Figure:
+    """Error del simulador por piloto, sin tráfico frente a con tráfico."""
+    if validation.empty or "ErrorTraffic" not in validation:
+        return empty("Sin carreras sin SC/VSC para validar")
+    v = validation.dropna(subset=["ErrorTraffic"])
+    fig = go.Figure()
+    for col, name, color in [("Error", "Pista libre", with_alpha(PRIMARY, 0.4)), ("ErrorTraffic", "Con tráfico", ACCENT)]:
+        fig.add_trace(go.Box(
+            x=v[col].clip(-30, 30), y=[name] * len(v), name=name, orientation="h", boxpoints="all",
+            jitter=0.35, pointpos=0, marker=dict(color=color, size=6, opacity=0.75),
+            line=dict(color=color), fillcolor="rgba(0,0,0,0)", boxmean=True,
+            customdata=np.stack([v["Driver"], [race_abbr.get(int(r), "") for r in v["Round"]], v[col]], axis=1),
+            hovertemplate="<b>%{customdata[0]}</b> · %{customdata[1]}<br>%{customdata[2]:+.1f} s<extra></extra>",
+        ))
+    fig.add_vline(x=0, line=dict(color=MUTED, width=1, dash="dot"))
+    fig.update_layout(showlegend=False)
+    fig.update_xaxes(title_text="Simulado − real (s) · recortado a ±30 s", range=[-31, 31])
+    _hbar_axes(fig)
+    return _base(fig, height=300)

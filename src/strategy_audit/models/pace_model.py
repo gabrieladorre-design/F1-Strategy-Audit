@@ -45,17 +45,22 @@ class RaceModel:
     compound_laps: dict[str, int] = field(default_factory=dict)
     min_stops: int = 1
     tyre_limit: int | None = None
+    traffic: float = 0.0       # s/vuelta perdidos de media con un coche a ≤ 1,5 s delante
 
     @property
     def usable_compounds(self) -> list[str]:
         """Compuestos con datos suficientes para simular estrategias con ellos."""
         return sorted(c for c in self.compound_deg if self.compound_laps.get(c, 0) >= MIN_COMPOUND_LAPS)
 
-    def predict(self, df: pd.DataFrame) -> np.ndarray:
+    def predict(self, df: pd.DataFrame, free_air: bool = False) -> np.ndarray:
+        """Tiempo de vuelta previsto. Con ``free_air`` se omite el efecto de ir en tráfico."""
         base = df["Driver"].map(self.driver_base).to_numpy(dtype=float)
         off = df["Compound"].map(self.compound_offset).to_numpy(dtype=float)
         deg = df["Compound"].map(self.compound_deg).to_numpy(dtype=float)
-        return base + off + deg * df["TyreLife"].to_numpy(float) + self.fuel * df["LapNumber"].to_numpy(float)
+        pred = base + off + deg * df["TyreLife"].to_numpy(float) + self.fuel * df["LapNumber"].to_numpy(float)
+        if not free_air and "InTraffic" in df:
+            pred = pred + self.traffic * df["InTraffic"].fillna(0).to_numpy(float)
+        return pred
 
 
 def _design(df: pd.DataFrame, drivers: list[str], compounds: list[str], ref: str) -> np.ndarray:
@@ -63,6 +68,8 @@ def _design(df: pd.DataFrame, drivers: list[str], compounds: list[str], ref: str
     cols += [(df["Compound"] == c).to_numpy(float) for c in compounds if c != ref]
     cols += [(df["Compound"] == c).to_numpy(float) * df["TyreLife"].to_numpy(float) for c in compounds]
     cols.append(df["LapNumber"].to_numpy(float))
+    traffic = df["InTraffic"] if "InTraffic" in df else pd.Series(0.0, index=df.index)
+    cols.append(traffic.fillna(0).to_numpy(float))
     return np.column_stack(cols)
 
 
@@ -97,7 +104,8 @@ def _unpack(rnd, drivers, compounds, ref, coef) -> RaceModel:
         deg[c] = float(coef[i])
         i += 1
     return RaceModel(round=rnd, driver_base=base, compound_offset=offset,
-                     compound_deg=deg, fuel=float(coef[i]), reference_compound=ref)
+                     compound_deg=deg, fuel=float(coef[i]), reference_compound=ref,
+                     traffic=float(coef[i + 1]))
 
 
 def _cv_mae(df: pd.DataFrame) -> float:
@@ -156,7 +164,8 @@ def models_to_frames(models: list[RaceModel]) -> tuple[pd.DataFrame, pd.DataFram
         ]
         summary.append({"Round": m.round, "Fuel": m.fuel, "ReferenceCompound": m.reference_compound,
                         "MAE_train": m.mae_train, "MAE_cv": m.mae_cv, "CleanLaps": m.n_laps,
-                        "MinStops": m.min_stops, "TyreLimit": m.tyre_limit if m.tyre_limit else 0})
+                        "MinStops": m.min_stops, "TyreLimit": m.tyre_limit if m.tyre_limit else 0,
+                        "TrafficCoef": m.traffic})
     return pd.DataFrame(drivers), pd.DataFrame(compounds), pd.DataFrame(summary)
 
 
@@ -180,4 +189,5 @@ def model_from_frames(rnd: int, drivers: pd.DataFrame, compounds: pd.DataFrame,
         compound_laps=dict(zip(c["Compound"], c["CleanLaps"].astype(int))),
         min_stops=int(s.get("MinStops", 1)),
         tyre_limit=int(s["TyreLimit"]) if s.get("TyreLimit", 0) else None,
+        traffic=float(s.get("TrafficCoef", 0.0)),
     )

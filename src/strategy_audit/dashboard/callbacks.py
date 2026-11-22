@@ -10,7 +10,7 @@ from strategy_audit.dashboard.layout import kpi
 from strategy_audit.dashboard.links import build_query, parse_query
 from strategy_audit.dashboard.theme import COMPOUND_ES, fmt_deg, fmt_pct, fmt_pos, fmt_s
 from strategy_audit.simulation.audit import driver_actual_strategy
-from strategy_audit.simulation.simulator import is_feasible, lap_times, max_stint
+from strategy_audit.simulation.simulator import is_feasible, lap_times, max_stint, strategy_cost
 
 
 def _surname(full_name: str) -> str:
@@ -50,11 +50,14 @@ def _trace_texts(audit, laps, focus, gp) -> tuple[str, str]:
     return title, sub
 
 
-def _window(model, laps_done, first_age, pls, alt, actual):
-    """Ventana de parada: curvas (1 parada) o mapa de calor (2 paradas) para los compuestos elegidos."""
+def _window(model, laps_done, first_age, pls, alt, actual, penalty=None, best_total=None):
+    """Ventana de parada: curvas (1 parada) o mapa de calor (2 paradas) para los compuestos elegidos.
+
+    Con ``penalty`` cada punto incluye el tiempo perdido en tráfico al salir de boxes.
+    """
     tol = 1.0
     if len(alt) == 2:
-        win = F.pit_window_curves(model, laps_done, first_age, pls)
+        win = F.pit_window_curves(model, laps_done, first_age, pls, penalty, best_total)
         pair = (alt[0][0], alt[1][0])
         real_stop = actual[0][1] if len(actual) == 2 else None
         fig = F.pit_window(win, pair, alt[0][1], real_stop, tol)
@@ -67,21 +70,32 @@ def _window(model, laps_done, first_age, pls, alt, actual):
             best_lap = int(np.nanargmin(curve))
             title = (f"{label}: parar entre las vueltas {rng[0]} y {rng[1]} cuesta menos de "
                      f"{fmt_s(tol, dec=0)} más que hacerlo en la {best_lap}")
-        sub = ("Tiempo perdido frente a la mejor estrategia simulada (s) según la vuelta de parada · "
-               "una curva por combinación de compuestos · ✕ = tu parada")
+        sub = ("Tiempo perdido frente a la mejor estrategia simulada (s) según la vuelta de parada, "
+               "con el tráfico al salir de boxes · una curva por combinación de compuestos · ✕ = tu parada")
         return fig, title, sub
     comps = tuple(c for c, _ in alt)
     stops = tuple(int(x) for x in np.cumsum([n for _, n in alt])[:-1])
-    fig, info = F.pit_window_2stop(model, laps_done, first_age, pls, comps, stops)
+    fig, info = F.pit_window_2stop(model, laps_done, first_age, pls, comps, stops, best_total, penalty)
     label = " → ".join(COMPOUND_ES[c] for c in comps).lower().capitalize()
     if not info["ok"]:
         return fig, f"{label} no es factible a 2 paradas en esta carrera", ""
     i, j = info["best"]
     title = (f"Con {label.lower()}, lo mejor era parar en las vueltas {i} y {j} "
              f"({fmt_s(info['loss'], signed=True)} frente al óptimo global)")
-    sub = ("Tiempo perdido frente a la mejor estrategia simulada (s) para cada par de vueltas de parada · "
-           "contorno: a menos de 1 s de ese mínimo · ✕ = tu estrategia")
+    sub = ("Tiempo perdido frente a la mejor estrategia simulada (s) para cada par de vueltas de parada, "
+           "con el tráfico al salir de boxes · contorno: a menos de 1 s de ese mínimo · ✕ = tu estrategia")
     return fig, title, sub
+
+
+def _traffic_note(alt, real) -> str:
+    """Detrás de quién sale tras la primera parada que le deja en tráfico, y comparación con la real."""
+    parts = []
+    if alt.rejoins:
+        lap, cars, gap = alt.rejoins[0]
+        who = ", ".join(cars[:3])
+        parts.append(f"tras parar en la V{lap} sale detrás de {who} (a {fmt_s(gap)})")
+    parts.append(f"real: {fmt_s(real.loss)}")
+    return " · ".join(parts)
 
 
 def _from_link(params, tab, rnd, drivers):
@@ -196,6 +210,10 @@ def register(app, store: Store) -> None:
         kpis = [
             kpi("Pérdida en boxes", fmt_s(row["PitLoss"]), "por parada con bandera verde"),
             kpi("Vueltas con SC/VSC", f"{len(neutral)}", f"de {int(row['TotalLaps'])}"),
+            kpi("Para adelantar", fmt_s(row.get("OvertakeDelta", float("nan"))),
+                "más rápido por vuelta que el de delante"),
+            kpi("Tiempo en tráfico", fmt_s(audit["ActualTraffic"].mean()),
+                f"de media por piloto · con la mejor estrategia, {fmt_s(audit['BestTraffic'].mean())}"),
             kpi("Mayor pérdida", f"{worst['Driver']} · {fmt_s(worst['StrategyDelta'])}",
                 worst["Team"] or "", tone="loss"),
             kpi("Estrategias casi óptimas", fmt_pct(near_opt.mean()), "a menos de 1 s de la mejor simulada"),
@@ -336,8 +354,11 @@ def register(app, store: Store) -> None:
                 if c not in model.usable_compounds:
                     warnings.append(f"Hay pocas vueltas con {COMPOUND_ES[c].lower()}: estimación poco fiable.")
 
-        sim_alt = lap_times(model, driver, alt, first_age, pls)
-        sim_real = lap_times(model, driver, actual, first_age, pls)
+        # Tiempo limpio de cada vuelta + lo que pierde en tráfico con los rivales en su sitio real
+        penalty = store.traffic_penalty(rnd, driver, first_age, actual)
+        tr_alt, tr_real = penalty(alt), penalty(actual)
+        sim_alt = lap_times(model, driver, alt, first_age, pls) + tr_alt.lost_by_lap
+        sim_real = lap_times(model, driver, actual, first_age, pls) + tr_real.lost_by_lap
         gap = np.cumsum(sim_alt - sim_real)
         diff = float(gap[-1])
 
@@ -354,6 +375,7 @@ def register(app, store: Store) -> None:
             kpi("Posición estimada", f"{fmt_pos(real_pos)} → {fmt_pos(est)}",
                 "frente a los tiempos reales de los rivales",
                 tone="gain" if est < real_pos else "loss" if est > real_pos else None),
+            kpi("Tiempo perdido en tráfico", fmt_s(tr_alt.loss), _traffic_note(tr_alt, tr_real)),
             kpi("Strategy Delta del piloto", fmt_s(me["StrategyDelta"]), f"mejor: {me['BestStrategy']}"),
         ]
         if diff < -0.05:
@@ -369,7 +391,11 @@ def register(app, store: Store) -> None:
         stops_real = list(np.cumsum([n for _, n in actual])[:-1])
         real_laps = store.laps[(store.laps["Round"] == rnd) & (store.laps["Driver"] == driver)]
         idx = np.arange(1, laps_done + 1)
-        win_fig, win_title, win_sub = _window(model, laps_done, first_age, pls, alt, actual)
+        best_rows = store.best_stints[(store.best_stints["Round"] == rnd) & (store.best_stints["Driver"] == driver)]
+        best_stints = list(zip(best_rows.sort_values("Stint")["Compound"], best_rows.sort_values("Stint")["Laps"].astype(int)))
+        best_total = (strategy_cost(model, best_stints, first_age, pls) + float(me.get("BestTraffic", 0.0))
+                      if best_stints else None)
+        win_fig, win_title, win_sub = _window(model, laps_done, first_age, pls, alt, actual, penalty, best_total)
         return (kpis, F.whatif_gap(gap, stops_alt, stops_real),
                 F.whatif_laps(real_laps, sim_alt, sim_real, np.isin(idx, stops_alt), np.isin(idx, stops_real)),
                 _warning(warnings), title, sub, win_fig, win_title, win_sub)

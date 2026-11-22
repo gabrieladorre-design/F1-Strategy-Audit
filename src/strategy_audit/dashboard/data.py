@@ -10,7 +10,8 @@ import pandas as pd
 
 from strategy_audit.config import GP_ABBR, GP_ES, PROCESSED_DIR, SEASON
 from strategy_audit.models.pace_model import RaceModel, model_from_frames
-from strategy_audit.simulation.simulator import pit_loss_by_lap
+from strategy_audit.simulation.simulator import pit_loss_by_lap, strategy_laps
+from strategy_audit.simulation.traffic import RaceTraffic, build_traffic, simulate_traffic
 
 TABLES = ["races", "laps", "stints", "neutralised", "results", "model_drivers",
           "model_compounds", "audit", "best_stints", "validation"]
@@ -65,6 +66,26 @@ class Store:
         row = self.race_row(rnd)
         return pit_loss_by_lap(int(row["TotalLaps"]), float(row["PitLoss"]), self.neutralised_laps(rnd))
 
+    def traffic(self, rnd: int) -> RaceTraffic:
+        """Posición real de los rivales vuelta a vuelta, con el umbral de adelantamiento calibrado."""
+        key = (id(self), rnd)
+        if key not in _TRAFFIC_CACHE:
+            row = self.race_row(rnd)
+            delta = row.get("OvertakeDelta", float("nan"))
+            _TRAFFIC_CACHE[key] = build_traffic(self.laps[self.laps["Round"] == rnd], self.neutralised_laps(rnd),
+                                                None if pd.isna(delta) else float(delta))
+        return _TRAFFIC_CACHE[key]
+
+    def traffic_penalty(self, rnd: int, driver: str, first_age: int, actual: list[tuple[str, int]]):
+        """Función stints → TrafficResult para un piloto (rivales fijos, como en la auditoría)."""
+        model, pls, tr = self.model(rnd), self.pit_losses(rnd), self.traffic(rnd)
+        _, actual_pits = strategy_laps(model, driver, actual, first_age, pls)
+
+        def run(stints: list[tuple[str, int]], keep_cum: bool = False):
+            clean, pits = strategy_laps(model, driver, stints, first_age, pls)
+            return simulate_traffic(tr, driver, clean, pits, actual_pits, keep_cum=keep_cum)
+        return run
+
 
 def _model(store: Store, rnd: int) -> RaceModel:
     key = (id(store), rnd)
@@ -74,6 +95,7 @@ def _model(store: Store, rnd: int) -> RaceModel:
 
 
 _MODEL_CACHE: dict = {}
+_TRAFFIC_CACHE: dict = {}
 
 
 @lru_cache(maxsize=1)

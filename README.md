@@ -15,8 +15,8 @@ Después de cada Gran Premio siempre surge la misma discusión: «Ferrari volvi�
 Este proyecto intenta medirlo. Para cada piloto de cada carrera de 2025 se pregunta: **¿cuántos segundos perdió por cómo gestionó paradas y neumáticos, comparado con lo mejor que podría haber hecho?** A ese número lo llamo **Strategy Delta**.
 
 **Para empezar, tres vistas que merecen la pena:**
-- [Mónaco con Verstappen](https://f1-strategy-audit.onrender.com/?vista=carrera&gp=MON&piloto=VER): con las dos paradas obligatorias, su estrategia le costó 22 s frente a la mejor posible.
-- [¿Y si…? en Singapur con Norris](https://f1-strategy-audit.onrender.com/?vista=ysi&gp=SGP&piloto=NOR): mueve la parada y mira cómo cambia su resultado.
+- [Mónaco con Verstappen](https://f1-strategy-audit.onrender.com/?vista=carrera&gp=MON&piloto=VER): sin contar el tráfico parecía que había perdido 15 s; con tráfico, su estrategia fue la mejor posible, porque cualquier otra le habría hecho salir de boxes detrás de Leclerc y Norris.
+- [¿Y si…? en Singapur con Norris](https://f1-strategy-audit.onrender.com/?vista=ysi&gp=SGP&piloto=NOR): perdió 24 s atascado detrás de otros coches; mueve la parada y mira detrás de quién habría salido.
 - [La temporada de Ferrari](https://f1-strategy-audit.onrender.com/?vista=temporada&equipo=Ferrari): cómo de bien acertó con la estrategia frente al resto de equipos.
 
 ## Cómo funciona
@@ -24,32 +24,34 @@ Este proyecto intenta medirlo. Para cada piloto de cada carrera de 2025 se pregu
 Todo el cálculo pesado se hace una vez, en local. La app solo lee los resultados ya calculados, por eso arranca rápido y se puede alojar gratis.
 
 ```
-FastF1 ─► limpieza ─► modelo de ritmo ─► pérdida en boxes ─► simulador ─► Strategy Delta ─► dashboard
-          (scripts/download_data.py)     (scripts/build_dataset.py, sin Internet)            (app.py)
+FastF1 ─► limpieza ─► modelo de ritmo ─► pérdida en boxes ─► tráfico ─► simulador ─► Strategy Delta ─► dashboard
+          (scripts/download_data.py)     (scripts/build_dataset.py, sin Internet)                       (app.py)
 ```
 
-**1. Datos.** Con [FastF1](https://docs.fastf1.dev/) descargo, vuelta a vuelta, el tiempo, el neumático, su edad, las paradas y si había Safety Car. Para estimar el ritmo me quedo solo con vueltas «limpias»: fuera la salida, las vueltas de entrada y salida de boxes, las de SC/VSC y las anormalmente lentas. Las carreras con lluvia o con datos de neumáticos incompletos se descartan enteras.
+**1. Datos.** Con [FastF1](https://docs.fastf1.dev/) descargo, vuelta a vuelta, el tiempo, el neumático, su edad, las paradas y si había Safety Car. Para estimar el ritmo me quedo solo con vueltas «limpias»: fuera la salida, las vueltas de entrada y salida de boxes, las de SC/VSC y las anormalmente lentas. Además marco las vueltas que empezaron con otro coche a menos de 1,5 s delante («en tráfico»). Las carreras con lluvia o con datos de neumáticos incompletos se descartan enteras.
 
 **2. Modelo de ritmo.** Para cada carrera ajusto una regresión lineal:
 
-> tiempo de vuelta = ritmo del piloto + efecto del compuesto + degradación × edad del neumático + combustible × nº de vuelta
+> tiempo de vuelta = ritmo del piloto + efecto del compuesto + degradación × edad del neumático + combustible × nº de vuelta + coste de ir en tráfico
 
-Así sé, en cada circuito, cuánto más rápido es un compuesto que otro y cuánto pierde por cada vuelta de uso. Lo valido dejando fuera stints enteros y prediciéndolos: se equivoca de media **0,53 s por vuelta**.
+Así sé, en cada circuito, cuánto más rápido es un compuesto que otro y cuánto pierde por cada vuelta de uso. El último término es clave: separa el ritmo de cada piloto en aire limpio de lo que pierde por ir detrás de otro coche (unos 0,3 s por vuelta de media). Lo valido dejando fuera stints enteros y prediciéndolos: se equivoca de media **0,50 s por vuelta**.
 
 **3. Pérdida en boxes.** Miro cuánto más lentas son las vueltas de entrada y salida de cada parada respecto a lo que predice el modelo, y me quedo con la mediana (unos 18–28 s según el circuito). Si paras con SC o VSC, cuento la mitad.
 
-**4. Simulador.** Con el modelo y la pérdida en boxes puedo calcular el tiempo total de cualquier estrategia. Pruebo todas las de 1 y 2 paradas que cumplen el reglamento (dos compuestos distintos, y en 2025 dos paradas obligatorias en Mónaco y máximo 25 vueltas por juego en Qatar) sin pasarme de la longitud de stint que se vio en carrera. Está vectorizado con NumPy, así que son miles de combinaciones por piloto en milisegundos. Con la estrategia real, el simulador se queda a **2,2 s** del tiempo real de carrera (≈ 0,04 %).
+**4. Tráfico.** Una parada puede ser rápida en el papel y dejarte detrás de un coche más lento al salir. Para tenerlo en cuenta, dejo a los rivales exactamente como corrieron de verdad y muevo solo al piloto que estudio. Vuelta a vuelta comparo su tiempo acumulado con el de los demás: si va a alcanzar a alguien, solo lo adelanta si esa vuelta es claramente más rápido (más que un umbral propio de cada circuito); si no, se queda detrás y pierde ese tiempo. El umbral sale de la propia carrera: miro todas las veces que un coche fue a menos de 1 s de otro y lo ajusto para que el modelo adelante en la misma proporción que hubo adelantamientos reales. Sale 3 s por vuelta en Mónaco y 0,9 s en Monza.
 
-**5. Strategy Delta.** Simulo la estrategia que hizo el piloto y la mejor posible, y resto. Como las dos salen del mismo modelo, sus errores se compensan casi del todo y lo que queda es el efecto de la decisión. Además estimo en qué posición habría acabado comparando su tiempo corregido con los tiempos reales de los rivales.
+**5. Simulador.** Con el modelo, la pérdida en boxes y el tráfico puedo calcular el tiempo total de cualquier estrategia. Pruebo todas las de 1 y 2 paradas que cumplen el reglamento (dos compuestos distintos, y en 2025 dos paradas obligatorias en Mónaco y máximo 25 vueltas por juego en Qatar) sin pasarme de la longitud de stint que se vio en carrera. Para encontrar la mejor sin simular el tráfico de las ~70 000 combinaciones, las recorro de más rápida a más lenta en pista libre y paro cuando ninguna de las que quedan puede ganar (el tráfico solo suma tiempo). Con la estrategia real y sin tráfico, el simulador iba 7,3 s por delante de la realidad; con tráfico, el sesgo baja a **+0,2 s** y el error típico es de **1,7 s** en hora y media de carrera.
+
+**6. Strategy Delta.** Simulo la estrategia que hizo el piloto y la mejor posible, las dos con tráfico, y resto. Como las dos salen del mismo modelo, sus errores se compensan casi del todo y lo que queda es el efecto de la decisión. Además estimo en qué posición habría acabado comparando su tiempo corregido con los tiempos reales de los rivales.
 
 ## Qué vas a ver en la app
 
 | Pestaña | Para qué sirve |
 |---|---|
 | **Análisis de carrera** | Eliges un GP y ves los stints reales frente a los óptimos, la evolución de la carrera, quién perdió más tiempo y cuánto se degradó cada compuesto |
-| **¿Y si…?** | Cambias neumáticos y vueltas de parada de un piloto y ves al momento cuánto habría ganado o perdido y en qué posición habría acabado. También muestra la ventana de parada: entre qué vueltas parar costaba menos de 1 s |
+| **¿Y si…?** | Cambias neumáticos y vueltas de parada de un piloto y ves al momento cuánto habría ganado o perdido, en qué posición habría acabado, detrás de quién habría salido de boxes y cuánto tiempo habría perdido en tráfico. También muestra la ventana de parada: entre qué vueltas parar costaba menos de 1 s |
 | **Temporada** | Ranking de equipos por acierto estratégico (con intervalo de confianza), posiciones perdidas por piloto y la carrera más difícil de acertar |
-| **Metodología** | Cómo de bien funciona el modelo, carrera a carrera, y lo que no tiene en cuenta |
+| **Metodología** | Cómo de bien funciona el modelo, lo difícil que es adelantar en cada circuito y lo que no tiene en cuenta |
 
 **Enlaces directos.** El botón «Copiar enlace a esta vista» guarda la carrera, el piloto o el equipo que tengas elegidos. Por ejemplo, [`?vista=carrera&gp=MON&piloto=VER`](https://f1-strategy-audit.onrender.com/?vista=carrera&gp=MON&piloto=VER) abre Mónaco con Verstappen destacado, y [`?vista=temporada&equipo=Ferrari`](https://f1-strategy-audit.onrender.com/?vista=temporada&equipo=Ferrari) abre la temporada de Ferrari. En la pestaña de carrera, «Descargar CSV» baja la auditoría de ese GP, lista para abrir en Excel.
 
@@ -57,24 +59,25 @@ Así sé, en cada circuito, cuánto más rápido es un compuesto que otro y cuá
 
 **En el móvil** también se usa bien: las pestañas se deslizan en una fila y cada gráfico se desplaza en horizontal, así que nada queda aplastado.
 
-Los títulos de cada gráfico no describen el gráfico, cuentan la conclusión (p. ej. «Norris perdió 11,6 s con B → M → B → B frente a M → B → B» en España), y cambian según lo que elijas.
+Los títulos de cada gráfico no describen el gráfico, cuentan la conclusión (p. ej. «Norris perdió 14,6 s con B → M → B → B frente a M → B → B» en España), y cambian según lo que elijas.
 
 ## Resultados 2025
 
 - **20 de 24 carreras** auditadas y **348** auditorías piloto-carrera.
 - Fuera quedan Australia, Gran Bretaña y Bélgica (lluvia) y Miami (FastF1 no trae los neumáticos de las primeras 24 vueltas y el resto llega desalineado).
-- Error del modelo: 0,53 s por vuelta en stints que no vio al ajustarse.
-- Error del simulador: 2,2 s en el tiempo total (carreras sin Safety Car).
+- Error del modelo: 0,50 s por vuelta en stints que no vio al ajustarse.
+- Error del simulador con tráfico: 1,7 s típico en el tiempo total y sesgo de +0,2 s (carreras sin Safety Car).
+- El tráfico cambia la conclusión: solo en el 22 % de los casos la mejor estrategia es la misma que sin tráfico. De media, la estrategia real perdió 7,4 s atascada detrás de otros coches y la mejor, 3,4 s.
 
 ## Lo que el modelo no sabe
 
 Prefiero decirlo claro antes de que salga en las preguntas:
 
-- **No hay tráfico.** Parar antes puede ser más rápido en el simulador y dejarte detrás de otro coche en la vida real.
+- **Los rivales no reaccionan.** Si el piloto hubiera parado antes, los demás habrían corrido igual: no le cubren ni se ven frenados por él. Y el adelantamiento es todo o nada (si tiene ritmo pasa, si no se queda detrás).
 - **Es a posteriori.** La mejor estrategia «sabe» cuándo salió el Safety Car; el muro no lo sabía.
 - **Neumático nuevo en cada parada.** No sé qué juegos le quedaban a cada piloto.
 - **Degradación lineal**, sin calentamiento del neumático ni salida. Por eso el modelo tiende a preferir empezar con duro.
-- En Mónaco o Singapur el ritmo lo marca el tráfico y el error es mayor.
+- **Imprevistos.** Averías, toques o problemas de frenos explican los errores más grandes del simulador; ningún modelo de estrategia los prevé.
 
 ## Ejecutarlo en local
 
