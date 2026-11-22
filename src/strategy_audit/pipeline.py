@@ -26,7 +26,16 @@ from strategy_audit.simulation.audit import audit_race, validate_simulator
 log = logging.getLogger(__name__)
 
 LAP_EXPORT_COLS = ["Round", "Driver", "Team", "LapNumber", "LapTime", "Compound", "TyreLife",
-                   "Stint", "IsClean", "IsPitIn", "Neutralised", "Position", "Predicted"]
+                   "Stint", "IsClean", "IsPitIn", "Neutralised", "Position", "Predicted",
+                   "PredictedFree", "InTraffic"]
+
+
+def _mae(df: pd.DataFrame, col: str) -> float | None:
+    return float(df[col].abs().mean()) if len(df) and col in df else None
+
+
+def _stat(df: pd.DataFrame, col: str, fn) -> float | None:
+    return float(fn(df[col])) if len(df) and col in df else None
 
 
 def run(season: int, raw_dir: Path = RAW_DIR, out_dir: Path = PROCESSED_DIR) -> dict:
@@ -46,6 +55,7 @@ def run(season: int, raw_dir: Path = RAW_DIR, out_dir: Path = PROCESSED_DIR) -> 
 
     models, audits, bests, validations, race_rows = [], [], [], [], []
     laps["Predicted"] = float("nan")
+    laps["PredictedFree"] = float("nan")
     for rnd in dry:
         try:
             model = fit_race(laps, rnd)
@@ -55,21 +65,27 @@ def run(season: int, raw_dir: Path = RAW_DIR, out_dir: Path = PROCESSED_DIR) -> 
         models.append(model)
         mask = (laps["Round"] == rnd) & laps["Driver"].isin(model.driver_base) & laps["Compound"].isin(model.compound_deg)
         laps.loc[mask, "Predicted"] = model.predict(laps[mask])
+        laps.loc[mask, "PredictedFree"] = model.predict(laps[mask], free_air=True)
 
         pit_loss = estimate_pit_loss(laps, model)
         n_laps = set(neutral.loc[(neutral["Round"] == rnd) & neutral["Neutralised"], "LapNumber"].astype(int))
         audit, best = audit_race(model, laps, stints, results, pit_loss, n_laps)
+        traffic = audit.attrs.pop("traffic", None)   # fuera de attrs: pandas los compara al concatenar
         audits.append(audit)
         bests.append(best)
 
-        val_mae = float("nan")
+        val_mae = val_mae_clean = float("nan")
         if not n_laps:
-            val = validate_simulator(model, laps, stints, pit_loss)
+            val = validate_simulator(model, laps, stints, pit_loss, traffic)
             validations.append(val)
             if len(val):
-                val_mae = float(val["Error"].abs().mean())
+                val_mae_clean = float(val["Error"].abs().mean())
+                val_mae = float(val["ErrorTraffic"].abs().mean()) if "ErrorTraffic" in val else val_mae_clean
         race_rows.append({"Round": rnd, "PitLoss": pit_loss, "NeutralisedLaps": len(n_laps),
-                          "SimValidationMAE": val_mae})
+                          "SimValidationMAE": val_mae, "SimValidationMAEClean": val_mae_clean,
+                          "OvertakeDelta": traffic.overtake_delta if traffic else float("nan"),
+                          "PassRate": traffic.pass_rate if traffic else float("nan"),
+                          "FollowSituations": traffic.situations if traffic else 0})
         log.info("R%02d MAE_cv=%.3fs pit=%.1fs auditados=%d", rnd, model.mae_cv, pit_loss, len(audit))
 
     drivers_df, compounds_df, summary_df = models_to_frames(models)
@@ -98,7 +114,12 @@ def run(season: int, raw_dir: Path = RAW_DIR, out_dir: Path = PROCESSED_DIR) -> 
         "races": int(len(races)),
         "dry_races_modelled": len(models),
         "pace_model_mae_cv_s": float(summary_df["MAE_cv"].mean()) if len(summary_df) else None,
-        "simulator_mae_s": float(tables["validation"]["Error"].abs().mean()) if len(tables["validation"]) else None,
+        "simulator_mae_s": _mae(tables["validation"], "ErrorTraffic"),
+        "simulator_mae_clean_s": _mae(tables["validation"], "Error"),
+        "simulator_median_abs_s": _stat(tables["validation"], "ErrorTraffic", lambda x: x.abs().median()),
+        "simulator_bias_s": _stat(tables["validation"], "ErrorTraffic", lambda x: x.mean()),
+        "simulator_bias_clean_s": _stat(tables["validation"], "Error", lambda x: x.mean()),
+        "traffic_coef_s": float(summary_df["TrafficCoef"].median()) if len(summary_df) else None,
         "audited_driver_races": int(len(tables["audit"])),
     }
     (out_dir / f"metrics_{season}.json").write_text(json.dumps(metrics, indent=2))

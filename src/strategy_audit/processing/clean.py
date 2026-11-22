@@ -7,7 +7,11 @@ modelo. Se excluyen:
 * vueltas de entrada y salida de boxes,
 * vueltas con Safety Car, VSC o bandera roja,
 * vueltas sin tiempo, borradas o con compuesto de lluvia,
-* valores atípicos (más de un 5 % por encima de la mediana del piloto).
+* valores atípicos (más de un 5 % por encima de la mediana del piloto),
+
+Las vueltas con otro coche a menos de 1,5 s delante se marcan con ``InTraffic``: el
+modelo estima aparte lo que cuestan, de modo que el ritmo de cada piloto es el de
+aire limpio y el simulador añade el tráfico solo cuando la estrategia lo provoca.
 
 Además se descartan carreras enteras con lluvia o con datos de neumáticos incompletos.
 """
@@ -21,7 +25,8 @@ from strategy_audit.config import DRY_COMPOUNDS, WET_COMPOUNDS
 NEUTRALISED_CODES = set("4567")
 OUTLIER_FACTOR = 1.05
 WET_SHARE_LIMIT = 0.05
-MISSING_TYRE_LIMIT = 0.05   # máximo de vueltas sin compuesto conocido para auditar una carrera
+MISSING_TYRE_LIMIT = 0.05
+FREE_AIR_GAP = 1.5   # s: con un coche a menos de esto delante, la vuelta no mide el ritmo propio   # máximo de vueltas sin compuesto conocido para auditar una carrera
 
 
 def is_neutralised(track_status) -> bool:
@@ -78,6 +83,10 @@ def prepare_laps(laps: pd.DataFrame, races: pd.DataFrame) -> pd.DataFrame:
     df["IsPitIn"] = raw_pit_in & next_new
     df["IsPitOut"] = raw_pit_out & new_stint & (df["LapNumber"] > 1)
 
+    df["GapAhead"] = _gap_ahead(df)
+    # En tráfico durante la vuelta L si al empezarla (final de L-1) tenía un coche a ≤ 1,5 s
+    df["InTraffic"] = (df.groupby(["Round", "Driver"])["GapAhead"].shift() <= FREE_AIR_GAP).astype(float)
+
     candidate = (
         (df["LapNumber"] > 1)
         & ~raw_pit_in
@@ -92,6 +101,15 @@ def prepare_laps(laps: pd.DataFrame, races: pd.DataFrame) -> pd.DataFrame:
     df["IsClean"] = False
     df.loc[candidate, "IsClean"] = df.loc[candidate, "LapTime"] <= OUTLIER_FACTOR * median
     return df
+
+
+def _gap_ahead(df: pd.DataFrame) -> pd.Series:
+    """Segundos con el coche de delante (en la misma vuelta) al cruzar la meta en cada vuelta."""
+    t = df["LapTime"].fillna(df.groupby(["Round", "Driver"])["LapTime"].transform("median"))
+    cum = t.groupby([df["Round"], df["Driver"]]).cumsum()
+    order = pd.DataFrame({"Round": df["Round"], "Lap": df["LapNumber"], "Cum": cum}).sort_values(["Round", "Lap", "Cum"])
+    gap = order.groupby(["Round", "Lap"])["Cum"].diff()
+    return gap.reindex(df.index)
 
 
 def neutralised_laps(laps: pd.DataFrame) -> pd.DataFrame:

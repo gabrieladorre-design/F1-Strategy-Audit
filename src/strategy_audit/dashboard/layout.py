@@ -56,8 +56,8 @@ def header(store: Store) -> html.Div:
             kpi("Carreras auditadas", f"{len(store.audited_rounds)}", f"de {m.get('races', '—')} disputadas (en seco)"),
             kpi("Error del modelo de ritmo", fmt_s(m.get("pace_model_mae_cv_s", float("nan")), dec=2),
                 "por vuelta, en stints no usados en el ajuste"),
-            kpi("Error del simulador", fmt_s(m.get("simulator_mae_s", float("nan"))),
-                "en el tiempo total, carreras sin SC/VSC"),
+            kpi("Error del simulador", fmt_s(m.get("simulator_median_abs_s", float("nan"))),
+                "típico (mediana) en el tiempo total de carrera, con tráfico"),
             kpi("Tiempo perdido por estrategia", f"{fmt_num(total_lost / 60, 0)} min",
                 "suma de toda la parrilla", tone="loss"),
         ]),
@@ -170,7 +170,26 @@ def validation_cards(store: Store) -> html.Div:
     def static(fig):   # figura fija: con «responsive» necesita una altura explícita en el contenedor
         return dcc.Graph(figure=fig, config=GRAPH_CONFIG, style={"height": f"{fig.layout.height}px"})
 
+    m = store.metrics
+    bias0, bias1 = m.get("simulator_bias_clean_s", float("nan")), m.get("simulator_bias_s", float("nan"))
+    tr = store.races.dropna(subset=["OvertakeDelta"]) if "OvertakeDelta" in store.races else store.races.iloc[0:0]
+    hardest = tr.loc[tr["OvertakeDelta"].idxmax()] if len(tr) else None
+    easiest = tr.loc[tr["OvertakeDelta"].idxmin()] if len(tr) else None
+    traffic_cards = [] if hardest is None else [
+        card(f"Sin tráfico el simulador iba {fmt_s(-bias0)} por delante de la realidad; "
+             f"con tráfico, {fmt_s(abs(bias1))} de media",
+             [static(F.traffic_validation(store.validation, abbr))],
+             "Tiempo total simulado − real con la estrategia real (s), por piloto, en carreras sin SC/VSC · "
+             "gris: pista libre, rojo: con tráfico"),
+        card(f"Adelantar en el {names.get(int(hardest['Round']), '')} exigía ir "
+             f"{fmt_s(hardest['OvertakeDelta'])} por vuelta más rápido; en el "
+             f"{names.get(int(easiest['Round']), '')}, {fmt_s(easiest['OvertakeDelta'])}",
+             [static(F.overtake_threshold(tr, abbr, names))],
+             "Ventaja de ritmo por vuelta necesaria para adelantar (s), calibrada con los adelantamientos "
+             "reales de cada carrera · más alto = más difícil"),
+    ]
     return html.Div(className="grid-2 method-wide", children=[
+        *traffic_cards,
         card(f"El error solo sube {fmt_s(gap, dec=2)} por vuelta al validar con stints no vistos; "
              f"el {names.get(int(worst['Round']), '')} es la excepción",
              [static(F.model_error_by_race(store.races, abbr, names))],
@@ -185,41 +204,55 @@ def validation_cards(store: Store) -> html.Div:
 def method_tab(store: Store) -> html.Div:
     m = store.metrics
     mae = fmt_s(m.get("pace_model_mae_cv_s", float("nan")), dec=2)
-    sim = fmt_s(m.get("simulator_mae_s", float("nan")))
+    sim = fmt_s(m.get("simulator_median_abs_s", float("nan")))
+    bias0 = fmt_s(-m.get("simulator_bias_clean_s", float("nan")))
+    bias1 = fmt_s(m.get("simulator_bias_s", float("nan")), signed=True)
+    coef = fmt_s(m.get("traffic_coef_s", float("nan")), dec=2)
     return html.Div(className="tab-body method", children=[
         validation_cards(store),
         card("Cómo se audita cada estrategia", [dcc.Markdown(f"""
 **1 · Datos.** Tiempos por vuelta, neumáticos, paradas y estado de pista de cada carrera de {store.season}
 con [FastF1](https://docs.fastf1.dev/). Se excluyen la vuelta 1, las vueltas de entrada y salida de boxes,
 las vueltas con SC/VSC y los valores atípicos. Las carreras con lluvia o con datos de neumáticos
-incompletos quedan fuera.
+incompletos quedan fuera. Cada vuelta se marca «en tráfico» si empezó con otro coche a menos de 1,5 s.
 
 **2 · Modelo de ritmo.** Para cada carrera, una regresión lineal por mínimos cuadrados:
 
-`tiempo = ritmo del piloto + efecto del compuesto + degradación × edad del neumático + combustible × vuelta`
+`tiempo = ritmo del piloto + efecto del compuesto + degradación × edad del neumático + combustible × vuelta + coste de ir en tráfico`
 
-Validación cruzada dejando fuera stints completos: **error medio de {mae} por vuelta**.
+Así el ritmo de cada piloto es el de **aire limpio**: ir detrás de otro coche cuesta de media **{coef}
+por vuelta**. Validación cruzada dejando fuera stints completos: **error medio de {mae} por vuelta**.
 
 **3 · Pérdida en boxes.** Mediana, por carrera, del tiempo extra de las vueltas de entrada y salida
 frente al ritmo del modelo, en paradas con bandera verde. Con SC/VSC se cuenta la mitad.
 
-**4 · Simulador.** Suma el tiempo de cada vuelta según el modelo más las paradas, para todas las
-combinaciones de 1 y 2 paradas que cumplen el reglamento (dos compuestos de seco) y no superan la
-longitud de stint observada en la carrera. Con la estrategia real, el tiempo total simulado se desvía
-**{sim}** de media del real (carreras sin SC/VSC).
+**4 · Tráfico.** Los rivales se quedan exactamente como corrieron de verdad y solo se mueve el piloto
+estudiado. Vuelta a vuelta se compara su tiempo acumulado con el de los demás: si va a alcanzar a un
+coche, solo lo adelanta si esa vuelta es más rápido que él por encima de un **umbral** propio de cada
+circuito; si no, se queda detrás y pierde el tiempo que no puede aprovechar. El umbral se calibra con la
+carrera: entre todas las veces que un coche fue a menos de 1 s de otro, el modelo adelanta en la misma
+proporción que hubo adelantamientos reales. Bajo SC/VSC no hay adelantamientos.
 
-**5 · Strategy Delta.** Tiempo simulado con la estrategia real − tiempo simulado con la mejor
-estrategia. Al comparar dos simulaciones del mismo modelo, el error del modelo se cancela en gran parte.
-La posición estimada compara el tiempo real menos el delta con los tiempos reales de los rivales.
+**5 · Simulador.** Tiempo de cada vuelta según el modelo, más las paradas, más el tráfico, para todas las
+combinaciones de 1 y 2 paradas que cumplen el reglamento (dos compuestos de seco) y no superan la
+longitud de stint observada. Con la estrategia real y sin tráfico, el simulador iba **{bias0} por delante**
+de la realidad; con tráfico el sesgo es **{bias1}** y el error típico, **{sim}** en el tiempo total.
+
+**6 · Strategy Delta.** Tiempo simulado con la estrategia real − tiempo simulado con la mejor
+estrategia, ambos con tráfico. La mejor se busca recorriendo las estrategias de más rápida a más lenta en
+pista libre y parando cuando ninguna restante puede mejorar (el tráfico solo suma tiempo). Al comparar dos
+simulaciones del mismo modelo, el error del modelo se cancela en gran parte. La posición estimada compara
+el tiempo real menos el delta con los tiempos reales de los rivales.
 """)], "Método, validación y unidades"),
         card("Qué no tiene en cuenta", [dcc.Markdown("""
-- La interacción entre coches (tráfico, aire sucio, adelantamientos): parar antes puede ser más rápido
-  en el modelo pero dejarte detrás de otro coche.
+- Los rivales no reaccionan: si el piloto hubiera parado antes, ellos habrían corrido igual (no le
+  cubren ni se ven frenados por él). Tampoco se cuentan los doblados, que ceden con banderas azules.
+- El adelantamiento es todo o nada: si tiene ritmo suficiente pasa, si no se queda detrás.
 - Es una auditoría *a posteriori*: la mejor estrategia «sabe» cuándo hubo SC/VSC.
 - Se asume neumático nuevo en cada parada (no se sabe qué juegos le quedaban a cada piloto).
 - Degradación lineal; una degradación estimada negativa (pista que mejora) se trunca a 0.
 - No se modelan el calentamiento del neumático ni la salida: el modelo tiende a preferir empezar con duro.
-- En circuitos sin adelantamientos (Mónaco, Singapur) el ritmo está limitado por el tráfico y el error es mayor.
+- Incidencias que ningún modelo prevé (averías, toques, problemas de frenos) explican los errores más grandes.
 - Reglas especiales de 2025 incluidas: dos paradas obligatorias en Mónaco y máximo de 25 vueltas por juego en Qatar.
 - El GP de Miami queda fuera: FastF1 no trae los neumáticos de las primeras 24 vueltas de casi toda
   la parrilla y los stints posteriores llegan desalineados, así que la auditoría no sería fiable.

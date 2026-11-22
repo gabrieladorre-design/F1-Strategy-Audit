@@ -5,7 +5,8 @@ de cada vuelta se calcula con el modelo de ritmo de la carrera; cada parada suma
 la pérdida en boxes (reducida si se para con SC/VSC).
 
 Supuestos (documentados como limitaciones):
-* No hay interacción entre coches (tráfico, adelantamientos, aire sucio).
+* Este módulo calcula el tiempo en pista libre; el tráfico (salir de boxes detrás de
+  coches más lentos) se añade aparte en ``traffic.py``.
 * El primer stint usa la edad real del neumático de salida; los siguientes,
   neumático nuevo.
 * No se extrapola más allá de la longitud de stint observada en la carrera (+10 %).
@@ -163,3 +164,52 @@ def lap_times(model: RaceModel, driver: str, stints: list[tuple[str, int]], firs
                 t += pit_losses[lap]
             times.append(t)
     return np.array(times)
+
+
+def strategy_laps(model: RaceModel, driver: str, stints: list[tuple[str, int]], first_age: int,
+                  pit_losses: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Tiempo simulado de cada vuelta sin parada y, aparte, lo que suma cada parada."""
+    clean = lap_times(model, driver, stints, first_age, np.zeros_like(pit_losses))
+    pit_add = np.zeros(len(clean))
+    for lap in Strategy(stints).stop_laps():
+        pit_add[lap - 1] = pit_losses[lap]
+    return clean, pit_add
+
+
+def ranked_strategies(model: RaceModel, total_laps: int, first_age: int, pit_losses: np.ndarray,
+                      limit: int = 4000) -> list[Strategy]:
+    """Todas las estrategias de 1 y 2 paradas (todas las vueltas de parada), de menor a mayor coste.
+
+    A diferencia de ``enumerate_strategies`` no se queda solo con la mejor vuelta de parada
+    de cada combinación de compuestos: con tráfico, parar una vuelta antes o después puede
+    cambiar el resultado.
+    """
+    N = total_laps
+    compounds = model.usable_compounds
+    first = {c: _stint_cost_array(model, c, N, first_age) for c in compounds}
+    fresh = {c: _stint_cost_array(model, c, N, 1) for c in compounds}
+    pl = pit_losses[: N + 1]
+    costs, specs = [], []
+    if model.min_stops <= 1:
+        s = np.arange(N + 1)
+        for c1, c2 in permutations(compounds, 2):
+            total = first[c1][s] + fresh[c2][N - s] + pl[s]
+            for k in np.nonzero(np.isfinite(total))[0]:
+                costs.append(total[k])
+                specs.append(((c1, int(k)), (c2, int(N - k))))
+    s1 = np.arange(N + 1)[:, None]
+    s2 = np.arange(N + 1)[None, :]
+    d = np.clip(s2 - s1, 0, N)
+    for c1, c2, c3 in product(compounds, repeat=3):
+        if len({c1, c2, c3}) < 2:
+            continue
+        total = first[c1][s1] + fresh[c2][d] + fresh[c3][N - s2] + pl[s1] + pl[s2]
+        total = np.where(s2 > s1, total, np.inf)
+        for i, j in zip(*np.nonzero(np.isfinite(total))):
+            costs.append(total[i, j])
+            specs.append(((c1, int(i)), (c2, int(j - i)), (c3, int(N - j))))
+    if not costs:
+        return []
+    costs = np.array(costs)
+    order = np.argsort(costs, kind="stable")[:limit]
+    return [Strategy(list(specs[k]), float(costs[k])) for k in order]

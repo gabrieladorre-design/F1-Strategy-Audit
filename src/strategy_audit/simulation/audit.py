@@ -5,6 +5,10 @@ mejor estrategia encontrada (segundos, ≥ 0). Se comparan dos simulaciones con 
 mismo modelo, de modo que el error del modelo afecta por igual a ambas y el delta
 mide solo el efecto de la decisión estratégica.
 
+Cada simulación incluye el tráfico (``traffic.py``): los rivales corren como en la
+realidad y el piloto pierde tiempo si sale de boxes detrás de coches más lentos a los
+que no puede adelantar. Se guarda también el delta sin tráfico (``CleanDelta``).
+
 Es una auditoría «a posteriori»: la mejor estrategia conoce cuándo hubo Safety Car.
 """
 from __future__ import annotations
@@ -17,8 +21,33 @@ from strategy_audit.simulation.simulator import (
     Strategy,
     enumerate_strategies,
     pit_loss_by_lap,
+    ranked_strategies,
     strategy_cost,
+    strategy_laps,
 )
+from strategy_audit.simulation.traffic import RaceTraffic, build_traffic, simulate_traffic
+
+MAX_TRAFFIC_EVALS = 25000  # tope de seguridad de estrategias evaluadas con tráfico por piloto
+
+
+def best_with_traffic(model: RaceModel, tr: RaceTraffic, driver: str, total_laps: int, first_age: int,
+                      pls: np.ndarray, actual_pit_add: np.ndarray) -> tuple[Strategy, float] | None:
+    """Mejor estrategia sumando el tiempo perdido en tráfico.
+
+    El tráfico solo puede sumar tiempo, así que se recorren las estrategias de menor a
+    mayor tiempo en pista libre y se para en cuanto el tiempo limpio de la siguiente ya
+    es peor que el mejor total encontrado (ramificación y poda: el resultado es exacto
+    salvo que se alcance el límite de evaluaciones).
+    """
+    best: tuple[Strategy, float] | None = None
+    for k, st in enumerate(ranked_strategies(model, total_laps, first_age, pls)):
+        if k >= MAX_TRAFFIC_EVALS or (best is not None and st.cost >= best[0].cost + best[1]):
+            break
+        clean, pit_add = strategy_laps(model, driver, st.stints, first_age, pls)
+        loss = simulate_traffic(tr, driver, clean, pit_add, actual_pit_add).loss
+        if best is None or st.cost + loss < best[0].cost + best[1]:
+            best = (st, loss)
+    return best
 
 
 def driver_actual_strategy(stints: pd.DataFrame, rnd: int, driver: str) -> tuple[list[tuple[str, int]], int]:
@@ -37,6 +66,7 @@ def audit_race(model: RaceModel, laps: pd.DataFrame, stints: pd.DataFrame, resul
 
     # Instante en que cada piloto cruza la meta (tiempo de sesión de su última vuelta)
     finish = race_laps.groupby("Driver").agg(LastLap=("LapNumber", "max"), Finish=("Time", "max"))
+    traffic = build_traffic(race_laps, neutralised)
 
     rows, best_rows = [], []
     for drv in model.driver_base:
@@ -52,11 +82,19 @@ def audit_race(model: RaceModel, laps: pd.DataFrame, stints: pd.DataFrame, resul
         if any(c not in model.compound_deg for c, _ in actual) or sum(n for _, n in actual) != driver_laps:
             continue
         candidates = enumerate_strategies(model, driver_laps, first_age, pls)
-        if not candidates:
+        if not candidates or drv not in traffic.drivers:
             continue
-        best = candidates[0]
+        clean_best = candidates[0]
         act = Strategy(actual, strategy_cost(model, actual, first_age, pls))
-        delta = max(act.cost - best.cost, 0.0)
+        act_clean, act_pits = strategy_laps(model, drv, actual, first_age, pls)
+        act_traffic = simulate_traffic(traffic, drv, act_clean, act_pits, act_pits).loss
+        found = best_with_traffic(model, traffic, drv, driver_laps, first_age, pls, act_pits)
+        best, best_traffic = found if found else (clean_best, 0.0)
+        if act.cost + act_traffic <= best.cost + best_traffic:
+            # Su estrategia es la mejor conocida (p. ej. un último stint de 1 vuelta, que el
+            # buscador no contempla): se muestra la suya como óptima
+            best, best_traffic = act, act_traffic
+        delta = max(act.cost + act_traffic - (best.cost + best_traffic), 0.0)
 
         r = res.loc[drv] if drv in res.index else None
         rows.append({
@@ -69,6 +107,9 @@ def audit_race(model: RaceModel, laps: pd.DataFrame, stints: pd.DataFrame, resul
             "ActualStrategy": act.label(), "ActualStops": act.stops,
             "BestStrategy": best.label(), "BestStops": best.stops,
             "StrategyDelta": round(delta, 2),
+            "CleanDelta": round(max(act.cost - clean_best.cost, 0.0), 2),
+            "CleanBestStrategy": clean_best.label(),
+            "ActualTraffic": round(act_traffic, 2), "BestTraffic": round(best_traffic, 2),
             "FinishTime": float(finish.loc[drv, "Finish"]),
             "LapsCompleted": driver_laps,
             "FirstAge": first_age,
@@ -82,6 +123,7 @@ def audit_race(model: RaceModel, laps: pd.DataFrame, stints: pd.DataFrame, resul
     audit = pd.DataFrame(rows)
     if not audit.empty:
         audit = _estimate_positions(audit)
+    audit.attrs["traffic"] = traffic
     return audit, pd.DataFrame(best_rows)
 
 
@@ -103,7 +145,7 @@ def _estimate_positions(audit: pd.DataFrame) -> pd.DataFrame:
 
 
 def validate_simulator(model: RaceModel, laps: pd.DataFrame, stints: pd.DataFrame,
-                       pit_loss: float) -> pd.DataFrame:
+                       pit_loss: float, traffic: RaceTraffic | None = None) -> pd.DataFrame:
     """Compara el tiempo total simulado con la estrategia real frente al real.
 
     Solo se usa en carreras sin neutralizaciones. La vuelta 1 (salida) no se
@@ -125,7 +167,13 @@ def validate_simulator(model: RaceModel, laps: pd.DataFrame, stints: pd.DataFram
         sim = _sim_actual_total(model, drv, s, pls)
         sim += dl["LapTime"].iloc[0] - _pred_lap(model, drv, s.iloc[0]["Compound"], int(s.iloc[0]["StartAge"]), 1)
         real = dl["LapTime"].sum()
-        out.append({"Round": rnd, "Driver": drv, "SimTotal": sim, "RealTotal": real, "Error": sim - real})
+        row = {"Round": rnd, "Driver": drv, "SimTotal": sim, "RealTotal": real, "Error": sim - real}
+        if traffic is not None and drv in traffic.drivers:
+            actual = list(zip(s["Compound"], s["Laps"].astype(int)))
+            clean, pits = strategy_laps(model, drv, actual, int(s.iloc[0]["StartAge"]), pls)
+            loss = simulate_traffic(traffic, drv, clean, pits, pits).loss
+            row.update(TrafficLoss=loss, SimTotalTraffic=sim + loss, ErrorTraffic=sim + loss - real)
+        out.append(row)
     return pd.DataFrame(out)
 
 
