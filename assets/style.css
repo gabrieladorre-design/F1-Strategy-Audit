@@ -31,6 +31,7 @@ a { color: var(--accent); }
   background: var(--accent); color: #fff; font-weight: 700; font-style: italic;
   padding: 8px 12px; border-radius: 6px; font-size: 20px; letter-spacing: -0.5px;
 }
+.logo-img { height: 38px; width: auto; display: block; }
 .brand h1 { color: var(--text); margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.4px; }
 .brand p { margin: 2px 0 0; color: var(--muted); font-size: 15px; }
 
@@ -131,6 +132,7 @@ footer { margin-top: 30px; color: var(--muted); font-size: 13px; text-align: cen
 @media (max-width: 700px) {
   .app { padding: 16px 12px 28px; }
   .brand h1 { font-size: 22px; }
+  .logo-img { height: 28px; }
   .brand p { font-size: 13.5px; }
   .kpis { gap: 10px; }
   .kpi { padding: 12px 14px; }
