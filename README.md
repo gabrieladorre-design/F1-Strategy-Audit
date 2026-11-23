@@ -114,7 +114,7 @@ tests/                       pytest con carreras sintéticas de parámetros cono
 ## Despliegue
 
 - Cada `git push` a `main` lanza los tests en GitHub Actions y vuelve a desplegar la app en Render.
-- El pie de la app muestra el commit que está en línea, para comprobar que el despliegue ha terminado.
+- Qué commit está en línea se ve en el panel de Render (Events).
 - Si después de un despliegue algo da error, recarga con Cmd + Shift + R: la pestaña abierta seguía con la versión anterior.
 
 ## Por qué no hay base de datos
