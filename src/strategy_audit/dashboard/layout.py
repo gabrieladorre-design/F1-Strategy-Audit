@@ -48,7 +48,7 @@ def header(store: Store) -> html.Div:
     total_lost = store.audit["StrategyDelta"].sum()
     return html.Div(className="header", children=[
         html.Div(className="brand", children=[
-            html.Div("F1", className="logo"),
+            html.Img(src="/assets/f1-logo.png", alt="F1", className="logo-img"),
             html.Div([html.H1("Strategy Audit"),
                       html.P(f"¿Ganó o perdió tiempo cada piloto por su estrategia? · Temporada {store.season}")]),
         ]),
