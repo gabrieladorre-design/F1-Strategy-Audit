@@ -21,7 +21,7 @@ INDEX = f"""<!DOCTYPE html>
         <title>{{%title%}}</title>
         <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
         <meta name="description" content="{DESCRIPTION}">
-        <meta name="theme-color" content="#C8102E">
+        <meta name="theme-color" content="#E10600">
         <meta property="og:type" content="website">
         <meta property="og:title" content="F1 Strategy Audit">
         <meta property="og:description" content="{DESCRIPTION}">

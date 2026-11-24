@@ -1,5 +1,8 @@
 """Sistema visual de F1 Strategy Audit: tokens, plantilla Plotly y formato numérico.
 
+Colores de la web de F1 (rojo #E10600, blanco, grises y negro carbono), igual que
+el design system «F1 Strategy Audit» (tema claro).
+
 Única fuente de verdad de colores y estilo: las figuras importan de aquí y no
 llevan colores sueltos.
 """
@@ -9,27 +12,30 @@ import plotly.graph_objects as go
 import plotly.io as pio
 
 # ---------------------------------------------------------------- Superficies y tinta
-SURFACE = "#F7F7F5"   # fondo de página
+SURFACE = "#F4F4F4"   # fondo de página (gris claro F1)
 PANEL = "#FFFFFF"     # tarjetas y fondo de figuras
-PANEL_2 = "#F1F1EE"   # controles, code, hover suave
-LINE = "#E4E3DF"      # bordes de tarjeta, ejes
-GRID = "#EEEDE9"      # cuadrícula (muy tenue)
-TEXT = "#1A1A1F"      # títulos, valores
-TEXT_2 = "#44444C"    # texto normal, etiquetas de datos
-MUTED = "#76767F"     # ticks, subtítulos, notas
+PANEL_2 = "#EDEDED"   # controles, code, hover suave
+LINE = "#D0D0D2"      # bordes de tarjeta (esquina F1), ejes
+GRID = "#EEEEEF"      # cuadrícula (muy tenue)
+TEXT = "#15151E"      # títulos, valores (negro carbono F1)
+TEXT_2 = "#38383F"    # texto normal, etiquetas de datos
+MUTED = "#6C6C74"     # ticks, subtítulos, notas (4,7:1 sobre SURFACE)
+
+CARBON = "#15151E"    # cabecera (texto blanco encima, 18:1)
+ON_CARBON_MUTED = "#949498"  # subtítulo sobre CARBON (6:1)
 
 # ---------------------------------------------------------------- Datos
-PRIMARY = "#2B2F3A"   # serie única / magnitud (carbón)
-ACCENT = "#C8102E"    # rojo F1 sobrio: foco, selección
-CONTEXT = "#D2D2D7"   # series en segundo plano
-LOSS = "#C8102E"      # tiempo perdido
+PRIMARY = "#15151E"   # serie única / magnitud (carbono)
+ACCENT = "#E10600"    # rojo F1: foco, selección (5,0:1 sobre blanco)
+CONTEXT = "#D0D0D2"   # series en segundo plano
+LOSS = ACCENT         # tiempo perdido
 GAIN = "#1E7F4F"      # tiempo ganado
 NEUTRAL_BAND = "#E8A317"  # SC/VSC (siempre con opacidad 0,10-0,15)
 
 # Escala secuencial de un solo tono (Strategy Delta, mapas de calor)
-SEQ_RED = [[0, "#FBEDEE"], [0.5, "#E0566A"], [1, "#7A0A1C"]]
+SEQ_RED = [[0, "#FBEDEE"], [0.5, "#F0606A"], [1, "#8A0400"]]
 # Ventana de parada: verde en el óptimo y rojo creciente al alejarse (s perdidos)
-WINDOW_SCALE = [[0, "#1E7F4F"], [0.07, "#DDEFE4"], [0.25, "#FBEDEE"], [0.6, "#E0566A"], [1, "#7A0A1C"]]
+WINDOW_SCALE = [[0, "#1E7F4F"], [0.07, "#DDEFE4"], [0.25, "#FBEDEE"], [0.6, "#F0606A"], [1, "#8A0400"]]
 
 FONT = "'Titillium Web', -apple-system, 'Segoe UI', Roboto, sans-serif"
 
@@ -38,7 +44,7 @@ FONT = "'Titillium Web', -apple-system, 'Segoe UI', Roboto, sans-serif"
 COMPOUND = {
     "SOFT": dict(fill="#DA291C", edge="#DA291C", stroke="#DA291C"),
     "MEDIUM": dict(fill="#FFD12E", edge="#B8930A", stroke="#D9A900"),
-    "HARD": dict(fill="#FFFFFF", edge="#3A3A40", stroke="#3A3A40"),
+    "HARD": dict(fill="#FFFFFF", edge="#38383F", stroke="#38383F"),
     "INTERMEDIATE": dict(fill="#43B02A", edge="#43B02A", stroke="#43B02A"),
     "WET": dict(fill="#0067AD", edge="#0067AD", stroke="#0067AD"),
 }
@@ -82,7 +88,7 @@ pio.templates["strategy_audit"] = go.layout.Template(layout=dict(
     font=dict(family=FONT, color=TEXT_2, size=13),
     paper_bgcolor=PANEL, plot_bgcolor=PANEL,
     separators=",.",                       # decimal con coma (español)
-    colorway=[PRIMARY, ACCENT, "#6B7280", "#9CA3AF"],
+    colorway=[PRIMARY, ACCENT, MUTED, "#B4B4BA"],
     margin=dict(l=56, r=24, t=16, b=44),
     hoverlabel=dict(bgcolor=PANEL, bordercolor=LINE, font=dict(family=FONT, color=TEXT, size=13)),
     legend=dict(orientation="h", x=0, xanchor="left", y=1.02, yanchor="bottom",
