@@ -20,7 +20,7 @@ Yo he querido medirlo. Para cada piloto en cada carrera de 2025 me pregunto:
 
 > **¿Cuántos segundos perdió por cuándo paró y qué neumáticos puso, comparado con lo mejor que podría haber hecho?**
 
-A ese número le llamo **Strategy Delta**. Si es 0, la estrategia fue perfecta. Si es 20, el muro le costó 20 segundos.
+A ese número le llamo **Strategy Delta**. Si es 0, la estrategia fue perfecta. Si es 20, la estrategia le costó 20 segundos al piloto.
 
 ## Objetivos
 
@@ -48,14 +48,6 @@ Todo esto se calcula una vez en mi ordenador. La app solo enseña los resultados
 | **Temporada** | Ver qué equipos aciertan más con la estrategia y qué pilotos perdieron más posiciones |
 | **Metodología** | Ver cómo de fiable es el modelo y lo que no tiene en cuenta |
 
-Algunos detalles que me parecían útiles:
-
-- **Enlaces directos:** el botón «Copiar enlace» guarda la carrera, el piloto o el equipo que tengas elegidos, para mandárselo a alguien.
-- **Descargas:** la auditoría de cada carrera en CSV (se abre bien en Excel) y cualquier gráfico en PNG con el icono de la cámara.
-- **Móvil:** se usa bien; las pestañas y los gráficos se deslizan de lado.
-- **Títulos que cuentan algo:** en vez de «Stints por piloto», pone por ejemplo «Norris perdió 14,6 s con B → M → B → B».
-- **Aspecto de F1:** rojo, blanco y negro carbono, la tipografía Titillium Web y el logo en la cabecera.
-
 ## Lo que ha salido
 
 - **20 de las 24 carreras** de 2025 y **348** análisis piloto-carrera.
@@ -72,17 +64,13 @@ Por el camino he cambiado varias cosas respecto a la propuesta. Estas son las im
 - **Un modelo sencillo.** Una regresión lineal por carrera: se entiende, se explica en dos minutos y funciona bien.
 - **Reglas reales de 2025.** Dos paradas obligatorias en Mónaco y máximo 25 vueltas por juego de neumáticos en Qatar.
 - **Fuera las carreras con datos malos.** Australia, Gran Bretaña y Bélgica por lluvia, y Miami porque a FastF1 le faltan los neumáticos de las primeras 24 vueltas. Descarto cualquier carrera con más de un 5 % de vueltas sin neumático conocido.
-- **Añadir el tráfico.** Al principio el simulador ignoraba a los demás coches y salía 7 s más rápido que la realidad. Con tráfico, la diferencia baja a 0,2 s. Fue el cambio que más mejoró el proyecto.
-- **Una app que se comparte.** Enlaces directos, vista previa al compartirla en WhatsApp o LinkedIn, versión móvil y descargas.
 - **Estilo propio de F1.** Colores, tipografía y logo para que se reconozca a primera vista.
-- **Tests y despliegue automático.** Cada cambio pasa los tests en GitHub Actions antes de publicarse en Render.
 
 ## Lo que el modelo no sabe
 
 Mejor decirlo yo antes de que me lo pregunten:
 
 - **Los rivales no reaccionan.** Si el piloto hubiera parado antes, los demás habrían hecho lo mismo que hicieron.
-- **Juega con ventaja.** La mejor estrategia ya sabe cuándo salió el Safety Car; el muro no lo sabía.
 - **Neumáticos nuevos en cada parada.** No sé qué juegos le quedaban a cada uno.
 - **Degradación en línea recta.** No tiene en cuenta que el neumático tarda en calentarse.
 - **Averías y toques.** Ningún modelo de estrategia los ve venir.
