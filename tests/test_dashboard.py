@@ -45,7 +45,7 @@ def test_figures(store):
     assert len(F.team_ranking(store.audit, focus="Ferrari").data) >= 2
     names = {r: f"GP {r}" for r in store.audited_rounds}
     assert len(F.team_evolution(store.audit, names, names).data) > 0
-    assert len(F.season_heatmap(store.audit, names, names).data) == 1
+    assert len(F.season_heatmap(store.audit, names, names).data) == 2  # fondo gris + datos
     assert len(F.positions_lost(store.audit).data) == 1
     laps = store.laps[store.laps["Round"] == rnd]
     assert len(F.race_trace(laps, audit, store.stints[store.stints["Round"] == rnd], set(), 60).data) > 0

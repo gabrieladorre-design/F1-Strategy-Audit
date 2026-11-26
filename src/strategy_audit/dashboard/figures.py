@@ -328,12 +328,17 @@ def season_heatmap(audit: pd.DataFrame, race_names: dict[int, str], race_abbr: d
     cols = [race_abbr.get(int(c), str(c)) for c in pv.columns]
     full = np.tile([race_names.get(int(c), str(c)) for c in pv.columns], (len(pv), 1))
     z = pv.to_numpy()
-    fig = go.Figure(go.Heatmap(
+    fig = go.Figure()
+    # Casillas sin datos (no corrió, abandonó o no se pudo analizar) en gris, para no confundirlas con 0 s
+    fig.add_trace(go.Heatmap(z=np.where(np.isnan(z), 1.0, np.nan), x=cols, y=pv.index, xgap=2, ygap=2,
+                             colorscale=[[0, "#E4E4E4"], [1, "#E4E4E4"]], showscale=False,
+                             hoverinfo="skip", hoverongaps=False))
+    fig.add_trace(go.Heatmap(
         z=z, x=cols, y=pv.index, xgap=2, ygap=2, customdata=full,
         colorscale=SEQ_RED, zmin=0, zmax=float(np.nanpercentile(z, 95)) if np.isfinite(z).any() else 1,
         colorbar=dict(title=dict(text="s", font=dict(color=MUTED)), tickfont=dict(color=MUTED),
                       thickness=10, outlinewidth=0),
-        hovertemplate="<b>%{y}</b> · %{customdata}<br>Strategy Delta · %{z:.1f} s<extra></extra>",
+        hovertemplate="<b>%{y}</b> · %{customdata}<br>Perdió %{z:.1f} s por su estrategia<extra></extra>",
         hoverongaps=False,
     ))
     fig.update_xaxes(showgrid=False, showline=False, ticks="", side="top")

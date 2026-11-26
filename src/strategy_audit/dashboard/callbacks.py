@@ -381,7 +381,7 @@ def register(app, store: Store) -> None:
         else:
             teams_title = f"{teams.index[0]} fue el equipo que mejor acertó con la estrategia ({fmt_s(teams.iloc[0])} de media)"
         teams_sub = ("Cada punto es un piloto en una carrera · rombo: media con intervalo de confianza del 95 % "
-                     "(bootstrap) · menos es mejor")
+                     "· menos es mejor")
 
         pos = a.groupby("Driver").agg(P=("PositionsLost", "sum"), Name=("FullName", "first"), Team=("Team", "first"))
         top = pos.sort_values("P").iloc[-1]
@@ -404,7 +404,8 @@ def register(app, store: Store) -> None:
         by_race = a.groupby("Round")["StrategyDelta"].mean()
         hardest = int(by_race.idxmax())
         heat_title = f"La carrera más difícil de acertar fue el {race_names[hardest]}: {fmt_s(by_race.max())} perdidos de media"
-        heat_sub = "Strategy Delta por piloto y carrera (s) · más oscuro = más tiempo perdido · huecos: no auditado"
+        heat_sub = ("Cada casilla son los segundos que perdió un piloto en una carrera por su estrategia · "
+                    "cuanto más oscuro, más tiempo perdido · en gris: carreras sin datos de ese piloto")
 
         return (F.team_ranking(a, focus), teams_title, teams_sub,
                 F.positions_lost(a, focus_driver), pos_title, pos_sub,
