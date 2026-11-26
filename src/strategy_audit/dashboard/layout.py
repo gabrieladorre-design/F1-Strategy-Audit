@@ -286,9 +286,5 @@ def build_layout(store: Store | None) -> html.Div:
                     className="tab", selected_className="tab--selected"),
         ]),
         # La versión desplegada no se muestra, pero queda en el HTML (atributo data-version)
-        html.Footer([
-            "Proyecto de Desarrollo de Aplicaciones para la Visualización de Datos · ICAI-ICADE · ",
-            html.A("Código en GitHub", href="https://github.com/gabrieladorre-design/F1-Strategy-Audit", target="_blank"),
-            " · Datos: FastF1",
-        ], **{"data-version": APP_VERSION}),
+        html.Div(hidden=True, **{"data-version": APP_VERSION}),
     ])
