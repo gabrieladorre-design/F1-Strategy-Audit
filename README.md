@@ -6,6 +6,8 @@
 
 La primera carga puede tardar alrededor de un minuto, porque el servidor gratuito se pone en pausa cuando nadie lo usa. Después funciona con normalidad.
 
+**Presentación:** [docs/F1_Strategy_Audit_Presentacion.pptx](docs/F1_Strategy_Audit_Presentacion.pptx)
+
 Gabriela de Dorremochea · Proyecto de la asignatura *Desarrollo de Aplicaciones para la Visualización de Datos* · ICAI-ICADE, curso 2026-2027
 
 ---
@@ -99,5 +101,5 @@ src/strategy_audit/
 assets/             estilos, logo e icono
 data/               los datos en Parquet
 tests/              tests con carreras inventadas
-docs/               la propuesta inicial
+docs/               la propuesta inicial y la presentación
 ```
