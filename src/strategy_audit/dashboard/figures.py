@@ -758,11 +758,12 @@ def traffic_validation(validation: pd.DataFrame, race_abbr: dict[int, str]) -> g
             x=v[col].clip(-30, 30), y=[name] * len(v), name=name, orientation="h", boxpoints="all",
             jitter=0.35, pointpos=0, marker=dict(color=color, size=6, opacity=0.75),
             line=dict(color=color), fillcolor="rgba(0,0,0,0)", boxmean=True,
+            hoveron="points",  # solo la etiqueta del punto, sin las estadísticas de la caja
             customdata=np.stack([v["Driver"], [race_abbr.get(int(r), "") for r in v["Round"]], v[col]], axis=1),
             hovertemplate="<b>%{customdata[0]}</b> · %{customdata[1]}<br>%{customdata[2]:+.1f} s<extra></extra>",
         ))
     fig.add_vline(x=0, line=dict(color=MUTED, width=1, dash="dot"))
-    fig.update_layout(showlegend=False)
+    fig.update_layout(showlegend=False, hovermode="closest")
     fig.update_xaxes(title_text="Simulado − real (s) · recortado a ±30 s", range=[-31, 31])
     _hbar_axes(fig)
     return _base(fig, height=300)
