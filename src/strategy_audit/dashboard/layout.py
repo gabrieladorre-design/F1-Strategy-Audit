@@ -203,55 +203,57 @@ def method_tab(store: Store) -> html.Div:
     coef = fmt_s(m.get("traffic_coef_s", float("nan")), dec=2)
     return html.Div(className="tab-body method", children=[
         validation_cards(store),
-        card("Cómo se audita cada estrategia", [dcc.Markdown(f"""
-**1 · Datos.** Tiempos por vuelta, neumáticos, paradas y estado de pista de cada carrera de {store.season}
-con [FastF1](https://docs.fastf1.dev/). Se excluyen la vuelta 1, las vueltas de entrada y salida de boxes,
-las vueltas con SC/VSC y los valores atípicos. Las carreras con lluvia o con datos de neumáticos
-incompletos quedan fuera. Cada vuelta se marca «en tráfico» si empezó con otro coche a menos de 1,5 s.
+        card("Cómo funciona", [dcc.Markdown(f"""
+**1 · Los datos.** De cada carrera de {store.season} se descargan, vuelta a vuelta, los tiempos, los
+neumáticos, las paradas y los periodos de Safety Car, con [FastF1](https://docs.fastf1.dev/). Para medir
+el ritmo solo se usan las vueltas normales: se dejan fuera la salida, las vueltas de entrada y salida de
+boxes, las de Safety Car y las que salen anormalmente lentas. Las carreras con lluvia o con datos
+incompletos no se analizan.
 
-**2 · Modelo de ritmo.** Para cada carrera, una regresión lineal por mínimos cuadrados:
+**2 · El ritmo de cada carrera.** Con una regresión lineal se calcula qué explica el tiempo de cada vuelta:
 
-`tiempo = ritmo del piloto + efecto del compuesto + degradación × edad del neumático + combustible × vuelta + coste de ir en tráfico`
+`tiempo de vuelta = ritmo del piloto + tipo de neumático + desgaste del neumático + gasolina + tráfico`
 
-Así el ritmo de cada piloto es el de **aire limpio**: ir detrás de otro coche cuesta de media **{coef}
-por vuelta**. Validación cruzada dejando fuera stints completos: **error medio de {mae} por vuelta**.
+Así se sabe cuánto más rápido es cada compuesto, cuánto se va degradando y cuánto se pierde yendo detrás
+de otro coche (de media, **{coef} por vuelta**). Probado con vueltas que el modelo no había visto, se
+equivoca **{mae} por vuelta** de media.
 
-**3 · Pérdida en boxes.** Mediana, por carrera, del tiempo extra de las vueltas de entrada y salida
-frente al ritmo del modelo, en paradas con bandera verde. Con SC/VSC se cuenta la mitad.
+**3 · Lo que cuesta parar.** Se mide cuánto tiempo se pierde en cada parada en ese circuito. Si se para
+con Safety Car, cuesta la mitad, porque el resto de coches también va despacio.
 
-**4 · Tráfico.** Los rivales se quedan exactamente como corrieron de verdad y solo se mueve el piloto
-estudiado. Vuelta a vuelta se compara su tiempo acumulado con el de los demás: si va a alcanzar a un
-coche, solo lo adelanta si esa vuelta es más rápido que él por encima de un **umbral** propio de cada
-circuito; si no, se queda detrás y pierde el tiempo que no puede aprovechar. El umbral se calibra con la
-carrera: entre todas las veces que un coche fue a menos de 1 s de otro, el modelo adelanta en la misma
-proporción que hubo adelantamientos reales. Bajo SC/VSC no hay adelantamientos.
+**4 · El tráfico.** Una parada puede parecer buena en el papel y dejarte detrás de un coche más lento.
+Para tenerlo en cuenta, los rivales corren exactamente como lo hicieron de verdad y solo cambia la
+estrategia del piloto que se analiza. Si alcanza a otro coche, solo lo adelanta si va claramente más
+rápido; si no, se queda detrás. Lo que significa «claramente» depende del circuito y sale de los
+adelantamientos reales de esa carrera: en Mónaco es casi imposible pasar y en Monza es fácil.
 
-**5 · Simulador.** Tiempo de cada vuelta según el modelo, más las paradas, más el tráfico, para todas las
-combinaciones de 1 y 2 paradas que cumplen el reglamento (dos compuestos de seco) y no superan la
-longitud de stint observada. Con la estrategia real y sin tráfico, el simulador iba **{bias0} por delante**
-de la realidad; con tráfico el sesgo es **{bias1}** y el error típico, **{sim}** en el tiempo total.
+**5 · El simulador.** Con todo lo anterior se calcula el tiempo total de cualquier estrategia de una o
+dos paradas que permita el reglamento. Repitiendo la estrategia real, el simulador suele quedarse a **{sim}** de
+la realidad. Sin contar el tráfico salía **{bias0}** más rápido de lo que fue la carrera; con tráfico
+la diferencia media baja a **{bias1}**.
 
-**6 · Strategy Delta.** Tiempo simulado con la estrategia real − tiempo simulado con la mejor
-estrategia, ambos con tráfico. La mejor se busca recorriendo las estrategias de más rápida a más lenta en
-pista libre y parando cuando ninguna restante puede mejorar (el tráfico solo suma tiempo). Al comparar dos
-simulaciones del mismo modelo, el error del modelo se cancela en gran parte. La posición estimada compara
-el tiempo real menos el delta con los tiempos reales de los rivales.
-""")], "Método, validación y unidades"),
-        card("Qué no tiene en cuenta", [dcc.Markdown("""
-- Los rivales no reaccionan: si el piloto hubiera parado antes, ellos habrían corrido igual (no le
-  cubren ni se ven frenados por él). Tampoco se cuentan los doblados, que ceden con banderas azules.
-- El adelantamiento es todo o nada: si tiene ritmo suficiente pasa, si no se queda detrás.
-- Es una auditoría *a posteriori*: la mejor estrategia «sabe» cuándo hubo SC/VSC.
-- Se asume neumático nuevo en cada parada (no se sabe qué juegos le quedaban a cada piloto).
-- Degradación lineal; una degradación estimada negativa (pista que mejora) se trunca a 0.
-- No se modelan el calentamiento del neumático ni la salida: el modelo tiende a preferir empezar con duro.
-- Incidencias que ningún modelo prevé (averías, toques, problemas de frenos) explican los errores más grandes.
-- Reglas especiales de 2025 incluidas: dos paradas obligatorias en Mónaco y máximo de 25 vueltas por juego en Qatar.
-- El GP de Miami queda fuera: FastF1 no trae los neumáticos de las primeras 24 vueltas de casi toda
-  la parrilla y los stints posteriores llegan desalineados, así que la auditoría no sería fiable.
-""")], "Limitaciones conocidas del modelo"),
+**6 · Strategy Delta.** Es la diferencia entre el tiempo con la estrategia que hizo el piloto y el tiempo
+con la mejor estrategia posible. Como las dos salen del mismo simulador, sus errores se compensan y lo
+que queda es el efecto de la decisión. Con ese tiempo ganado se estima también en qué posición habría
+terminado.
+""")], "Los pasos del análisis, de los datos al resultado"),
+        card("Lo que el modelo no sabe", [dcc.Markdown("""
+- **Los rivales no reaccionan.** Si el piloto hubiera parado antes, los demás habrían hecho lo mismo
+  que hicieron en realidad.
+- **Adelantar es sí o no.** Si tiene ritmo suficiente, pasa; si no, se queda detrás.
+- **Se analiza después de la carrera.** La mejor estrategia ya sabe cuándo salió el Safety Car, algo
+  que el equipo no podía saber.
+- **Neumáticos nuevos en cada parada.** No se sabe qué juegos le quedaban a cada piloto.
+- **Desgaste en línea recta.** No se tiene en cuenta que el neumático tarda en calentarse, por eso el
+  modelo suele preferir empezar con duro.
+- **Imprevistos.** Averías, toques o problemas de frenos explican los mayores errores; ningún modelo
+  de estrategia los ve venir.
+- **Reglas de 2025 incluidas.** Dos paradas obligatorias en Mónaco y un máximo de 25 vueltas por juego
+  de neumáticos en Qatar.
+- **Miami no se analiza.** Faltan los datos de neumáticos de las primeras 24 vueltas, así que el
+  resultado no sería fiable.
+""")], "Sus límites, para leer los resultados con cuidado"),
     ])
-
 
 def build_layout(store: Store | None) -> html.Div:
     if store is None or not store.audited_rounds:
