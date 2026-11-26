@@ -139,3 +139,21 @@ def fmt_vuelta(n) -> str:
 
 def fmt_pct(v) -> str:
     return f"{v * 100:.0f} %"
+
+
+# ---------------------------------------------------------------- Estrategias en lenguaje normal
+_INITIAL_ES = {"B": "blando", "M": "medio", "D": "duro", "I": "intermedio", "LL": "lluvia"}
+
+
+def fmt_strategy(label: str) -> str:
+    """«D (V34) → M» → «Duro hasta la vuelta 34 y medio hasta el final»."""
+    import re
+    parts = [re.match(r"\s*(\w+)(?:\s*\(V(\d+)\))?", p).groups() for p in str(label).split("→")]
+    names = [_INITIAL_ES.get(c, c) for c, _ in parts]
+    # Si repite compuesto, es un juego nuevo del mismo: «otro duro»
+    names = [n if i == 0 or n != names[i - 1] else f"otro {n}" for i, n in enumerate(names)]
+    if len(parts) == 1:
+        return f"{names[0].capitalize()} toda la carrera"
+    out = [f"{names[0].capitalize()} hasta la vuelta {parts[0][1]}"]
+    out += [f"{n} hasta la {lap}" for n, (_, lap) in zip(names[1:-1], parts[1:-1])]
+    return ", ".join(out) + f" y {names[-1]} hasta el final"

@@ -112,11 +112,11 @@ def delta_bars(audit: pd.DataFrame, focus: str | None = None) -> go.Figure:
         marker=dict(color=colors, cornerradius=3),
         text=[fmt_s(v) if v >= 0.05 else "" for v in a["StrategyDelta"]],
         textposition="outside", textfont=dict(color=T.TEXT_2), cliponaxis=False,
-        customdata=np.stack([names, a["Team"].fillna(""), a["ActualStrategy"], a["BestStrategy"],
+        customdata=np.stack([names, a["Team"].fillna(""), a["ActualStrategy"].map(T.fmt_strategy), a["BestStrategy"].map(T.fmt_strategy),
                              a["AuditedPosition"], a["EstPosition"]], axis=1),
         hovertemplate=("<b>%{customdata[0]}</b> · %{customdata[1]}"
                        "<br>Strategy Delta · %{x:.1f} s"
-                       "<br>Real · %{customdata[2]}<br>Óptima · %{customdata[3]}"
+                       "<br>Hizo · %{customdata[2]}<br>Lo mejor · %{customdata[3]}"
                        "<br>Posición · P%{customdata[4]} → P%{customdata[5]} estimada<extra></extra>"),
     ))
     fig.update_xaxes(title_text="Segundos perdidos (s)",
@@ -212,17 +212,17 @@ def whatif_laps(real: pd.DataFrame, sim_alt: np.ndarray, sim_real: np.ndarray,
     laps = np.arange(1, len(sim_alt) + 1)
     fig = go.Figure()
     r = real[~real["IsPitIn"] & (real["LapNumber"] > 1)]
-    fig.add_trace(go.Scatter(x=r["LapNumber"], y=r["LapTime"], mode="markers", name="Real",
+    fig.add_trace(go.Scatter(x=r["LapNumber"], y=r["LapTime"], mode="markers", name="Tiempo real",
                              marker=dict(color=MUTED, size=6),
-                             hovertemplate="<b>Vuelta %{x}</b><br>Real · %{y:.3f} s<extra></extra>"))
+                             hovertemplate="<b>Vuelta %{x}</b><br>Tiempo real · %{y:.3f} s<extra></extra>"))
     y_real = np.where(pit_mask_real, np.nan, sim_real)
     y_alt = np.where(pit_mask_alt, np.nan, sim_alt)
-    fig.add_trace(go.Scatter(x=laps, y=y_real, mode="lines", name="Modelo · estrategia real",
+    fig.add_trace(go.Scatter(x=laps, y=y_real, mode="lines", name="Simulación de lo que hizo",
                              line=dict(color=PRIMARY, width=2, dash="dash"),
-                             hovertemplate="<b>Vuelta %{x}</b><br>Modelo real · %{y:.3f} s<extra></extra>"))
-    fig.add_trace(go.Scatter(x=laps, y=y_alt, mode="lines", name="Modelo · alternativa",
+                             hovertemplate="<b>Vuelta %{x}</b><br>Lo que hizo (simulado) · %{y:.3f} s<extra></extra>"))
+    fig.add_trace(go.Scatter(x=laps, y=y_alt, mode="lines", name="Simulación de tu estrategia",
                              line=dict(color=ACCENT, width=2.5),
-                             hovertemplate="<b>Vuelta %{x}</b><br>Alternativa · %{y:.3f} s<extra></extra>"))
+                             hovertemplate="<b>Vuelta %{x}</b><br>Tu estrategia (simulada) · %{y:.3f} s<extra></extra>"))
     vals = np.r_[r["LapTime"].to_numpy(), y_alt[~np.isnan(y_alt)]]
     if len(vals):
         fig.update_yaxes(range=[np.nanpercentile(vals, 1) - 0.5, np.nanpercentile(vals, 97) + 1.0])

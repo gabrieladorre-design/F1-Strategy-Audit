@@ -8,7 +8,7 @@ from strategy_audit.dashboard import figures as F
 from strategy_audit.dashboard.data import Store
 from strategy_audit.dashboard.layout import kpi
 from strategy_audit.dashboard.links import parse_query
-from strategy_audit.dashboard.theme import COMPOUND_ES, fmt_deg, fmt_pct, fmt_pos, fmt_s
+from strategy_audit.dashboard.theme import COMPOUND_ES, fmt_deg, fmt_pct, fmt_pos, fmt_s, fmt_strategy
 from strategy_audit.simulation.audit import driver_actual_strategy
 from strategy_audit.simulation.simulator import is_feasible, lap_times, max_stint, strategy_cost
 
@@ -177,17 +177,17 @@ def register(app, store: Store) -> None:
         ]
 
         top_best = audit["BestStrategy"].value_counts().index[0]
-        stints_title = (f"En el {gp}, la mejor estrategia simulada era {top_best}; "
+        stints_title = (f"En el {gp}, la mejor estrategia era {fmt_strategy(top_best).lower()}; "
                         f"{int(near_opt.sum())} de {len(audit)} pilotos se quedaron a menos de 1 s")
         stints_sub = ("Stints por piloto, ordenados por posición final · izquierda: real, derecha: óptima"
                       + (" · franjas: vueltas con SC/VSC" if neutral else ""))
 
         subject = audit[audit["Driver"] == focus].iloc[0] if focus in set(order) else worst
         if subject["StrategyDelta"] < 0.05:
-            delta_title = f"{_surname(subject['FullName'])} acertó con la estrategia óptima ({subject['ActualStrategy']})"
+            delta_title = f"{_surname(subject['FullName'])} acertó con la mejor estrategia ({fmt_strategy(subject['ActualStrategy']).lower()})"
         else:
             delta_title = (f"{_surname(subject['FullName'])} perdió {fmt_s(subject['StrategyDelta'])} "
-                           f"con {subject['ActualStrategy']} frente a {subject['BestStrategy']}")
+                           f"con su estrategia. Lo mejor: {fmt_strategy(subject['BestStrategy']).lower()}")
         delta_sub = "Segundos perdidos frente a la mejor estrategia simulada (s) · menos es mejor"
 
         usable = {c: d for c, d in model.compound_deg.items() if c in model.usable_compounds}
@@ -333,7 +333,8 @@ def register(app, store: Store) -> None:
                 "frente a los tiempos reales de los rivales",
                 tone="gain" if est < real_pos else "loss" if est > real_pos else None),
             kpi("Tiempo perdido en tráfico", fmt_s(tr_alt.loss), _traffic_note(tr_alt, tr_real)),
-            kpi("Strategy Delta del piloto", fmt_s(me["StrategyDelta"]), f"mejor: {me['BestStrategy']}"),
+            kpi("Perdió con su estrategia", fmt_s(me["StrategyDelta"]),
+                f"Lo mejor habría sido: {fmt_strategy(me['BestStrategy']).lower()}"),
         ]
         if diff < -0.05:
             title = f"Con esta estrategia, {name} habría ganado {fmt_s(-diff)}" + \

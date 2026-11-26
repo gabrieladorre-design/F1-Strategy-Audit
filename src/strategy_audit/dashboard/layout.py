@@ -123,9 +123,9 @@ def whatif_tab(store: Store) -> html.Div:
                 html.Div(id="wi-kpis", className="kpis kpis-small"),
                 card("", [graph("wi-gap")], id_="wi-gap-card"),
                 card("", [graph("wi-window")], id_="wi-window-card"),
-                card("Ritmo vuelta a vuelta: real frente al modelo", [graph("wi-laps")],
-                     "Tiempo por vuelta (s) · puntos = real, discontinua = modelo con la estrategia real, "
-                     "roja = alternativa"),
+                card("Tiempo de cada vuelta: lo que pasó y lo que habría pasado", [graph("wi-laps")],
+                     "Puntos grises: tiempos reales · línea negra: simulación de lo que hizo el piloto · "
+                     "línea roja: simulación de la estrategia que has elegido"),
             ]),
         ]),
     ])
