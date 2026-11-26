@@ -51,6 +51,8 @@ Todo esto se calcula una vez en mi ordenador. La app solo enseña los resultados
 ## Lo que ha salido
 
 - **20 de las 24 carreras** de 2025 y **348** análisis piloto-carrera.
+  - **¿Por qué 20 carreras y no 24?** Australia, Gran Bretaña y Bélgica se corrieron con lluvia, y el modelo solo sabe de neumáticos de seco. En Miami faltan los datos de neumáticos de las primeras 24 vueltas. Analizar esas cuatro daría resultados poco fiables.
+  - **¿Por qué 348 y no 400?** 20 carreras por 20 pilotos serían unos 400 casos. Solo se analiza a quien terminó la carrera, porque si un piloto abandona no se puede saber cuánto le costó su estrategia. Se quedan fuera 37 abandonos, 6 descalificaciones, 2 pilotos que no salieron y otros 6 casos con datos de neumáticos incompletos.
 - En total, **64 minutos** perdidos por estrategia en la temporada. Solo un **11 %** de las estrategias fueron casi perfectas.
 - **El tráfico lo cambia todo:** en el 78 % de los casos, la mejor estrategia con tráfico no es la misma que sin él.
 - **¿Es fiable?** El modelo se equivoca de media 0,5 s por vuelta. Repitiendo la carrera real, el simulador acaba a 1,7 s de la realidad en hora y media de carrera.
