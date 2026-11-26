@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 import numpy as np
-from dash import Input, Output, State, ctx, dcc, html, no_update
+from dash import Input, Output, State, ctx, html, no_update
 
 from strategy_audit.dashboard import figures as F
 from strategy_audit.dashboard.data import Store
 from strategy_audit.dashboard.layout import kpi
-from strategy_audit.dashboard.links import build_query, parse_query
+from strategy_audit.dashboard.links import parse_query
 from strategy_audit.dashboard.theme import COMPOUND_ES, fmt_deg, fmt_pct, fmt_pos, fmt_s
 from strategy_audit.simulation.audit import driver_actual_strategy
 from strategy_audit.simulation.simulator import is_feasible, lap_times, max_stint, strategy_cost
@@ -106,32 +106,11 @@ def _from_link(params, tab, rnd, drivers):
     return None
 
 
-CSV_COLUMNS = {
-    "Driver": "Piloto", "FullName": "Nombre", "Team": "Equipo", "GridPosition": "Parrilla",
-    "Position": "Posición oficial", "AuditedPosition": "Posición entre auditados",
-    "EstPosition": "Posición con la mejor estrategia", "PositionsLost": "Posiciones perdidas",
-    "ActualStrategy": "Estrategia real", "BestStrategy": "Mejor estrategia simulada",
-    "ActualStops": "Paradas reales", "BestStops": "Paradas óptimas",
-    "StrategyDelta": "Strategy Delta (s)", "LapsCompleted": "Vueltas",
-}
-
-
-def race_csv(store: Store, rnd: int):
-    """Tabla de auditoría de una carrera, con columnas en español, para descargar."""
-    a = store.audit[store.audit["Round"] == rnd].sort_values("AuditedPosition")
-    out = a[list(CSV_COLUMNS)].copy()
-    for col in ("GridPosition", "Position"):
-        out[col] = out[col].astype("Int64")
-    out = out.rename(columns=CSV_COLUMNS)
-    out.insert(0, "Gran Premio", store.race_es(rnd))
-    return out
-
-
 def register(app, store: Store) -> None:
     race_names = {r: store.race_es(r) for r in store.audited_rounds}
     race_abbr = {r: store.race_abbr(r) for r in store.audited_rounds}
 
-    # ------------------------------------------------------------------ Enlaces y descarga
+    # ------------------------------------------------------------------ Enlaces directos (?vista=…)
     @app.callback(
         Output("url-params", "data"), Output("tabs", "value"), Output("race-dd", "value"),
         Output("wi-race", "value"), Output("season-focus", "value"),
@@ -145,28 +124,6 @@ def register(app, store: Store) -> None:
         rnd = p.get("round", no_update)
         return (p, p.get("tab", no_update), rnd if p.get("tab", "race") == "race" else no_update,
                 rnd if p.get("tab") == "whatif" else no_update, p.get("team", no_update))
-
-    @app.callback(
-        Output("share-copy", "content"), Input("share-copy", "n_clicks"),
-        State("url", "href"), State("tabs", "value"), State("race-dd", "value"),
-        State("race-focus", "value"), State("wi-race", "value"), State("wi-driver", "value"),
-        State("season-focus", "value"), prevent_initial_call=True,
-    )
-    def share_link(_, href, tab, race, focus, wi_race, wi_driver, team):
-        base = (href or "").split("?")[0]
-        if tab == "whatif":
-            return base + build_query(store, tab, wi_race, wi_driver)
-        return base + build_query(store, tab, race, focus, team)
-
-    @app.callback(Output("race-download", "data"), Input("race-csv", "n_clicks"),
-                  State("race-dd", "value"), prevent_initial_call=True)
-    def download_race(_, rnd):
-        if rnd is None:
-            return no_update
-        df = race_csv(store, rnd)
-        name = f"strategy_audit_{store.season}_R{rnd:02d}_{store.race_abbr(rnd)}.csv"
-        # Separador «;», coma decimal y BOM UTF-8: se abre bien (con tildes) en Excel en español
-        return dcc.send_string("\ufeff" + df.to_csv(index=False, sep=";", decimal=","), name)
 
     # ------------------------------------------------------------------ Carrera
     @app.callback(Output("race-focus", "options"), Output("race-focus", "value"),

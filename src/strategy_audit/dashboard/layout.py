@@ -37,9 +37,7 @@ def card(title, children, subtitle: str | None = None, id_: str | None = None,
 
 def graph(id_: str) -> html.Div:
     # En el móvil el contenedor se desplaza en horizontal: el gráfico conserva un ancho legible
-    config = {**GRAPH_CONFIG, "toImageButtonOptions": {
-        **GRAPH_CONFIG["toImageButtonOptions"], "filename": f"f1-strategy-audit-{id_}"}}
-    return html.Div(dcc.Loading(dcc.Graph(id=id_, config=config), type="dot", color=ACCENT),
+    return html.Div(dcc.Loading(dcc.Graph(id=id_, config=GRAPH_CONFIG), type="dot", color=ACCENT),
                     className="graph-scroll")
 
 
@@ -73,11 +71,6 @@ def race_tab(store: Store) -> html.Div:
                                    value=rounds[-1] if rounds else None, clearable=False, className="dd")]),
             html.Div([html.Label("Destacar piloto"),
                       dcc.Dropdown(id="race-focus", placeholder="Ninguno: mejor y peor", className="dd")]),
-            html.Div(className="controls-action", children=[
-                html.Button("Descargar CSV", id="race-csv", className="btn",
-                            title="Auditoría de esta carrera: estrategia real, óptima y Strategy Delta por piloto"),
-                dcc.Download(id="race-download"),
-            ]),
         ]),
         html.Div(id="race-kpis", className="kpis kpis-small"),
         card("", [graph("race-stints")], id_="race-stints-card"),
@@ -271,10 +264,6 @@ def build_layout(store: Store | None) -> html.Div:
         dcc.Location(id="url", refresh=False),
         dcc.Store(id="url-params"),
         header(store),
-        html.Div(className="share", children=[
-            dcc.Clipboard(id="share-copy", title="Copiar enlace a esta vista", className="share-icon"),
-            html.Span("Copiar enlace a esta vista", className="share-label"),
-        ]),
         dcc.Tabs(id="tabs", value="race", className="tabs", mobile_breakpoint=0, children=[
             dcc.Tab(label="Análisis de carrera", value="race", children=race_tab(store),
                     className="tab", selected_className="tab--selected"),
